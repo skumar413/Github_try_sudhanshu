@@ -1,0 +1,113 @@
+name: Terraform-build
+
+run-name: ${{ github.ref_name }} by @${{ github.actor }}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target Environmet'
+        required: true
+        default: dev
+        options:
+          - "dev"
+          - "uat"
+          - "prod"
+
+jobs:
+  # checkbranch:
+  #   runs-on: ubuntu-latest
+  #   name: setting branch outputs
+  #   steps:
+  #     - shell: bash
+  #       id: branchdecide
+  #       run: |
+  #         if [[ ${GITHUB_REF_NAME} =~ feature/* ]]
+  #         then
+  #           echo "not demopipeline branch. picking prod"
+  #           echo "branch=dev" >> "$GITHUB_OUTPUT"
+  #         elif [[ ${GITHUB_REF_NAME} =~ IET-* ]]
+  #         then
+  #           echo "demopipeline branch. picking dev" 
+  #           echo "branch=dev" >> "$GITHUB_OUTPUT"
+  #         elif [ ${GITHUB_REF_NAME} == 'env/dev' ]
+  #         then
+  #           echo "Picking Dev branch" 
+  #           echo "branch=dev" >> "$GITHUB_OUTPUT"
+  #         elif [ ${GITHUB_REF_NAME} == 'env/uat' ]
+  #         then
+  #           echo "Picking UAT branch" 
+  #           echo "branch=uat" >> "$GITHUB_OUTPUT"
+  #         elif [ ${GITHUB_REF_NAME} == 'env/demo' ]
+  #         then
+  #           echo "Picking Demo branch" 
+  #           echo "branch=demo" >> "$GITHUB_OUTPUT"
+  #         elif [ ${GITHUB_REF_NAME} == 'env/stage' ]
+  #         then
+  #           echo "Picking Stage branch" 
+  #           echo "branch=stage" >> "$GITHUB_OUTPUT"
+  #         elif [ ${GITHUB_REF_NAME} == 'main' ]
+  #         then
+  #           echo "Picking Prod branch" 
+  #           echo "branch=prod" >> "$GITHUB_OUTPUT"
+  #         elif [ ${GITHUB_REF_NAME} == 'env/nonprod' ]
+  #         then
+  #           echo "Picking nonprod branch" 
+  #           echo "branch=nonprod" >> "$GITHUB_OUTPUT"
+  #         else
+  #           echo "reached else. picking dev" 
+  #           echo "branch=dev" >> "$GITHUB_OUTPUT"
+  #         fi
+  #   outputs:
+  #     branch: ${{ steps.branchdecide.outputs.branch }}
+
+  checkoutputs:
+    runs-on: ubuntu-latest
+    if: ${{ always() }}
+    #needs: [checkbranch]
+    name: verifying environment
+    environment: ${{ github.event.inputs.environment }}
+    env:
+      TF_VARS: ${{ vars.TF_VARS }}
+      TF_WORKSPACE: ${{ vars.TF_WORKSPACE }}
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+    steps:
+      - id: settingEnvVars
+        run: echo "TF_VARS=${{ env.TF_VARS }}" >> "$GITHUB_OUTPUT"
+      - id: settingWorkspace
+        run: echo "TF_WORKSPACE=${{ env.TF_WORKSPACE }}" >> "$GITHUB_OUTPUT"
+      - id: settingClientID
+        run: echo "AZURE_CLIENT_ID=${{ env.AZURE_CLIENT_ID }}" >> "$GITHUB_OUTPUT"
+      - id: settingSubscription
+        run: echo "AZURE_SUBSCRIPTION_ID=${{ env.AZURE_SUBSCRIPTION_ID }}" >> "$GITHUB_OUTPUT"
+    outputs:
+      TF_VARS: ${{ steps.settingEnvVars.outputs.TF_VARS }}
+      TF_WORKSPACE: ${{ steps.settingWorkspace.outputs.TF_WORKSPACE }}
+      AZURE_CLIENT_ID: ${{ steps.settingClientID.outputs.AZURE_CLIENT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ steps.settingSubscription.outputs.AZURE_SUBSCRIPTION_ID }}
+
+  terraform-job:
+    needs: [checkoutputs]
+    uses: KPMG-UK/github-actions-library/.github/workflows/terraform-job.yml@feature/working-version
+    with:
+      GH_OIDC_IAM_ROLE: arn:aws:iam::091825714958:role/github_actions_infrastructure_role
+      TF_AWS_REGION: eu-west-1
+      TF_VERSION: "1.2"
+      TF_DIRECTORY: .terraform/core
+      TF_PLAN_NAME: tfplan
+      TF_PLAN_PATH: tfplan
+      TF_VARS: ${{needs.checkoutputs.outputs.TF_VARS}}
+      TF_WORKSPACE: ${{needs.checkoutputs.outputs.TF_WORKSPACE}}
+    secrets:
+      VAULT_ROLE_ID: ${{ secrets.VAULT_ROLE_ID }}
+      VAULT_SECRET_ID: ${{ secrets.VAULT_SECRET_ID }}
+      GH_APP_ID: ${{ secrets.TF_MODULES_GITHUB_APP_ID }}  
+      GH_PRIVATE_KEY: ${{ secrets.TF_MODULES_GITHUB_PRIVATE_KEY }}
+      SERVICE_TEAM_APP_ID: ${{ secrets.SERVICE_TEAM_APP_ID }}
+      SERVICE_TEAM_PRIVATE_KEY: ${{ secrets.SERVICE_TEAM_PRIVATE_KEY }}
+      AZURE_CLIENT_ID: ${{needs.checkoutputs.outputs.AZURE_CLIENT_ID}}
+      AZURE_SUBSCRIPTION_ID: ${{needs.checkoutputs.outputs.AZURE_SUBSCRIPTION_ID}}
