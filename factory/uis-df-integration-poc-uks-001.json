@@ -1,0 +1,9 @@
+{
+	"name": "uis-df-integration-poc-uks-001",
+	"location": "uksouth",
+	"identity": {
+		"type": "SystemAssigned",
+		"principalId": "3a3bf678-cd48-4c63-8c1c-65f9cf639cf1",
+		"tenantId": "49a50445-bdfa-4b79-ade3-547b4f3986e9"
+	}
+}

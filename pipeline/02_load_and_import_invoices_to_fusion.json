@@ -1,0 +1,4473 @@
+{
+	"name": "02_load_and_import_invoices_to_fusion",
+	"properties": {
+		"activities": [
+			{
+				"name": "Check Invoices Rows",
+				"type": "Script",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "Query",
+							"text": "SELECT COUNT(*) INVOICE_COUNT FROM [dbo].[vw_Invoices_FBDI]"
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			},
+			{
+				"name": "Check Invoice Lines Rows",
+				"type": "Script",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "Query",
+							"text": "SELECT COUNT(*) AS LINE_COUNT FROM [dbo].[vw_Invoice_Lines_FBDI]"
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			},
+			{
+				"name": "If Condition",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "Logging Start",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@and(\n  greater(\n    int(activity('Check Invoices Rows').output.resultSets[0].rows[0].INVOICE_COUNT),\n    0\n  ),\n  greater(\n    int(activity('Check Invoice Lines Rows').output.resultSets[0].rows[0].LINE_COUNT),\n    0\n   )\n)",
+						"type": "Expression"
+					},
+					"ifFalseActivities": [
+						{
+							"name": "End Pipeline",
+							"type": "Wait",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"waitTimeInSeconds": 1
+							}
+						}
+					],
+					"ifTrueActivities": [
+						{
+							"name": "Invoices_sql_to_csv",
+							"type": "Copy",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "AzureSqlSource",
+									"sqlReaderQuery": "SELECT * FROM [dbo].[vw_Invoices_FBDI]",
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"sink": {
+									"type": "DelimitedTextSink",
+									"storeSettings": {
+										"type": "AzureBlobStorageWriteSettings"
+									},
+									"formatSettings": {
+										"type": "DelimitedTextWriteSettings",
+										"quoteAllText": true,
+										"fileExtension": ".txt"
+									}
+								},
+								"enableStaging": false,
+								"translator": {
+									"type": "TabularTranslator",
+									"mappings": [
+										{
+											"source": {
+												"name": "Invoice ID",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 1
+											}
+										},
+										{
+											"source": {
+												"name": "Business Unit",
+												"type": "String",
+												"physicalType": "varchar"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 2
+											}
+										},
+										{
+											"source": {
+												"name": "Source",
+												"type": "String",
+												"physicalType": "nvarchar"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 3
+											}
+										},
+										{
+											"source": {
+												"name": "Invoice Number",
+												"type": "String",
+												"physicalType": "varchar"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 4
+											}
+										},
+										{
+											"source": {
+												"name": "Invoice Amount",
+												"type": "Decimal",
+												"physicalType": "decimal",
+												"scale": 2,
+												"precision": 12
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 5
+											}
+										},
+										{
+											"source": {
+												"name": "Invoice Date",
+												"type": "Date",
+												"physicalType": "date"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 6
+											}
+										},
+										{
+											"source": {
+												"name": "Supplier Name",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 7
+											}
+										},
+										{
+											"source": {
+												"name": "Supplier Number",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 8
+											}
+										},
+										{
+											"source": {
+												"name": "Supplier Site",
+												"type": "String",
+												"physicalType": "varchar"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 9
+											}
+										},
+										{
+											"source": {
+												"name": "Invoice Currency",
+												"type": "String",
+												"physicalType": "char"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 10
+											}
+										},
+										{
+											"source": {
+												"name": "Payment Currency",
+												"type": "String",
+												"physicalType": "char"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 11
+											}
+										},
+										{
+											"source": {
+												"name": "Description",
+												"type": "String",
+												"physicalType": "varchar"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 12
+											}
+										},
+										{
+											"source": {
+												"name": "Import Set",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 13
+											}
+										},
+										{
+											"source": {
+												"name": "Invoice Type",
+												"type": "String",
+												"physicalType": "varchar"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 14
+											}
+										},
+										{
+											"source": {
+												"name": "Legal Entity",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 15
+											}
+										},
+										{
+											"source": {
+												"name": "Customer Tax Registration Number",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 16
+											}
+										},
+										{
+											"source": {
+												"name": "Customer Registration Code",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 17
+											}
+										},
+										{
+											"source": {
+												"name": "First-Party Tax Registration Number",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 18
+											}
+										},
+										{
+											"source": {
+												"name": "Supplier Tax Registration Number",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 19
+											}
+										},
+										{
+											"source": {
+												"name": "Payment Terms",
+												"type": "String",
+												"physicalType": "varchar"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 20
+											}
+										},
+										{
+											"source": {
+												"name": "Terms Date",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 21
+											}
+										},
+										{
+											"source": {
+												"name": "Goods Received Date",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 22
+											}
+										},
+										{
+											"source": {
+												"name": "Invoice Received Date",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 23
+											}
+										},
+										{
+											"source": {
+												"name": "Accounting Date",
+												"type": "Date",
+												"physicalType": "date"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 24
+											}
+										},
+										{
+											"source": {
+												"name": "Payment Method",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 25
+											}
+										},
+										{
+											"source": {
+												"name": "Pay Group",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 26
+											}
+										},
+										{
+											"source": {
+												"name": "Pay Alone",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 27
+											}
+										},
+										{
+											"source": {
+												"name": "Discountable Amount",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 28
+											}
+										},
+										{
+											"source": {
+												"name": "Prepayment Number",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 29
+											}
+										},
+										{
+											"source": {
+												"name": "Prepayment Line Number",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 30
+											}
+										},
+										{
+											"source": {
+												"name": "Prepayment Application Amount",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 31
+											}
+										},
+										{
+											"source": {
+												"name": "Prepayment Accounting Date",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 32
+											}
+										},
+										{
+											"source": {
+												"name": "Invoice Includes Prepayment",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 33
+											}
+										},
+										{
+											"source": {
+												"name": "Conversion Rate Type",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 34
+											}
+										},
+										{
+											"source": {
+												"name": "Conversion Date",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 35
+											}
+										},
+										{
+											"source": {
+												"name": "Conversion Rate",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 36
+											}
+										},
+										{
+											"source": {
+												"name": "Liability Combination",
+												"type": "String",
+												"physicalType": "varchar"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 37
+											}
+										},
+										{
+											"source": {
+												"name": "Document Category Code",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 38
+											}
+										},
+										{
+											"source": {
+												"name": "Voucher Number",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 39
+											}
+										},
+										{
+											"source": {
+												"name": "Requester First Name",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 40
+											}
+										},
+										{
+											"source": {
+												"name": "Requester Last Name",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 41
+											}
+										},
+										{
+											"source": {
+												"name": "Requester Employee Number",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 42
+											}
+										},
+										{
+											"source": {
+												"name": "Delivery Channel Code",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 43
+											}
+										},
+										{
+											"source": {
+												"name": "Bank Charge Bearer",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 44
+											}
+										},
+										{
+											"source": {
+												"name": "Remit-to Supplier",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 45
+											}
+										},
+										{
+											"source": {
+												"name": "Remit-to Supplier Number",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 46
+											}
+										},
+										{
+											"source": {
+												"name": "Remit-to Address Name",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 47
+											}
+										},
+										{
+											"source": {
+												"name": "Payment Priority",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 48
+											}
+										},
+										{
+											"source": {
+												"name": "Settlement Priority",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 49
+											}
+										},
+										{
+											"source": {
+												"name": "Unique Remittance Identifier",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 50
+											}
+										},
+										{
+											"source": {
+												"name": "Unique Remittance Identifier Check Digit",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 51
+											}
+										},
+										{
+											"source": {
+												"name": "Payment Reason Code",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 52
+											}
+										},
+										{
+											"source": {
+												"name": "Payment Reason Comments",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 53
+											}
+										},
+										{
+											"source": {
+												"name": "Remittance Message 1",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 54
+											}
+										},
+										{
+											"source": {
+												"name": "Remittance Message 2",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 55
+											}
+										},
+										{
+											"source": {
+												"name": "Remittance Message 3",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 56
+											}
+										},
+										{
+											"source": {
+												"name": "Withholding Tax Group",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 57
+											}
+										},
+										{
+											"source": {
+												"name": "Ship-to Location",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 58
+											}
+										},
+										{
+											"source": {
+												"name": "Taxation Country",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 59
+											}
+										},
+										{
+											"source": {
+												"name": "Document Sub Type",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 60
+											}
+										},
+										{
+											"source": {
+												"name": "Tax Invoice Internal Sequence Number",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 61
+											}
+										},
+										{
+											"source": {
+												"name": "Supplier Tax Invoice Number",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 62
+											}
+										},
+										{
+											"source": {
+												"name": "Tax Invoice Recording Date",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 63
+											}
+										},
+										{
+											"source": {
+												"name": "Supplier Tax Invoice Date",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 64
+											}
+										},
+										{
+											"source": {
+												"name": "Supplier Tax Invoice Conversion Rate",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 65
+											}
+										},
+										{
+											"source": {
+												"name": "Port Of Entry Code",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 66
+											}
+										},
+										{
+											"source": {
+												"name": "Correction Year",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 67
+											}
+										},
+										{
+											"source": {
+												"name": "Correction Period",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 68
+											}
+										},
+										{
+											"source": {
+												"name": "Import Document Number",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 69
+											}
+										},
+										{
+											"source": {
+												"name": "Import Document Date",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 70
+											}
+										},
+										{
+											"source": {
+												"name": "Tax Control Amount",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 71
+											}
+										},
+										{
+											"source": {
+												"name": "Calculate Tax During Import",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 72
+											}
+										},
+										{
+											"source": {
+												"name": "Add Tax To Invoice Amount",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 73
+											}
+										},
+										{
+											"source": {
+												"name": "Attribute Category",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 74
+											}
+										},
+										{
+											"source": {
+												"name": "Attribute 1",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 75
+											}
+										},
+										{
+											"source": {
+												"name": "Attribute 2",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 76
+											}
+										},
+										{
+											"source": {
+												"name": "Attribute 3",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 77
+											}
+										},
+										{
+											"source": {
+												"name": "Attribute 4",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 78
+											}
+										},
+										{
+											"source": {
+												"name": "Attribute 5",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 79
+											}
+										},
+										{
+											"source": {
+												"name": "Attribute 6",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 80
+											}
+										},
+										{
+											"source": {
+												"name": "Attribute 7",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 81
+											}
+										},
+										{
+											"source": {
+												"name": "Attribute 8",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 82
+											}
+										},
+										{
+											"source": {
+												"name": "Attribute 9",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 83
+											}
+										},
+										{
+											"source": {
+												"name": "Attribute 10",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 84
+											}
+										},
+										{
+											"source": {
+												"name": "Attribute 11",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 85
+											}
+										},
+										{
+											"source": {
+												"name": "Attribute 12",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 86
+											}
+										},
+										{
+											"source": {
+												"name": "Attribute 13",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 87
+											}
+										},
+										{
+											"source": {
+												"name": "Attribute 14",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 88
+											}
+										},
+										{
+											"source": {
+												"name": "Attribute 15",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 89
+											}
+										},
+										{
+											"source": {
+												"name": "Attribute Number 1",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 90
+											}
+										},
+										{
+											"source": {
+												"name": "Attribute Number 2",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 91
+											}
+										},
+										{
+											"source": {
+												"name": "Attribute Number 3",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 92
+											}
+										},
+										{
+											"source": {
+												"name": "Attribute Number 4",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 93
+											}
+										},
+										{
+											"source": {
+												"name": "Attribute Number 5",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 94
+											}
+										},
+										{
+											"source": {
+												"name": "Attribute Date 1",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 95
+											}
+										},
+										{
+											"source": {
+												"name": "Attribute Date 2",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 96
+											}
+										},
+										{
+											"source": {
+												"name": "Attribute Date 3",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 97
+											}
+										},
+										{
+											"source": {
+												"name": "Attribute Date 4",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 98
+											}
+										},
+										{
+											"source": {
+												"name": "Attribute Date 5",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 99
+											}
+										},
+										{
+											"source": {
+												"name": "Global Attribute Category",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 100
+											}
+										},
+										{
+											"source": {
+												"name": "Global Attribute 1",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 101
+											}
+										},
+										{
+											"source": {
+												"name": "Global Attribute 2",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 102
+											}
+										},
+										{
+											"source": {
+												"name": "Global Attribute 3",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 103
+											}
+										},
+										{
+											"source": {
+												"name": "Global Attribute 4",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 104
+											}
+										},
+										{
+											"source": {
+												"name": "Global Attribute 5",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 105
+											}
+										},
+										{
+											"source": {
+												"name": "Global Attribute 6",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 106
+											}
+										},
+										{
+											"source": {
+												"name": "Global Attribute 7",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 107
+											}
+										},
+										{
+											"source": {
+												"name": "Global Attribute 8",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 108
+											}
+										},
+										{
+											"source": {
+												"name": "Global Attribute 9",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 109
+											}
+										},
+										{
+											"source": {
+												"name": "Global Attribute 10",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 110
+											}
+										},
+										{
+											"source": {
+												"name": "Global Attribute 11",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 111
+											}
+										},
+										{
+											"source": {
+												"name": "Global Attribute 12",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 112
+											}
+										},
+										{
+											"source": {
+												"name": "Global Attribute 13",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 113
+											}
+										},
+										{
+											"source": {
+												"name": "Global Attribute 14",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 114
+											}
+										},
+										{
+											"source": {
+												"name": "Global Attribute 15",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 115
+											}
+										},
+										{
+											"source": {
+												"name": "Global Attribute 16",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 116
+											}
+										},
+										{
+											"source": {
+												"name": "Global Attribute 17",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 117
+											}
+										},
+										{
+											"source": {
+												"name": "Global Attribute 18",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 118
+											}
+										},
+										{
+											"source": {
+												"name": "Global Attribute 19",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 119
+											}
+										},
+										{
+											"source": {
+												"name": "Global Attribute 20",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 120
+											}
+										},
+										{
+											"source": {
+												"name": "Global Attribute Number 1",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 121
+											}
+										},
+										{
+											"source": {
+												"name": "Global Attribute Number 2",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 122
+											}
+										},
+										{
+											"source": {
+												"name": "Global Attribute Number 3",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 123
+											}
+										},
+										{
+											"source": {
+												"name": "Global Attribute Number 4",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 124
+											}
+										},
+										{
+											"source": {
+												"name": "Global Attribute Number 5",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 125
+											}
+										},
+										{
+											"source": {
+												"name": "Global Attribute Date 1",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 126
+											}
+										},
+										{
+											"source": {
+												"name": "Global Attribute Date 2",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 127
+											}
+										},
+										{
+											"source": {
+												"name": "Global Attribute Date 3",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 128
+											}
+										},
+										{
+											"source": {
+												"name": "Global Attribute Date 4",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 129
+											}
+										},
+										{
+											"source": {
+												"name": "Global Attribute Date 5",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 130
+											}
+										},
+										{
+											"source": {
+												"name": "URL Attachments",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 131
+											}
+										},
+										{
+											"source": {
+												"name": "Remit-to Bank Account Number",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 132
+											}
+										},
+										{
+											"source": {
+												"name": "Supplier IBAN",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 133
+											}
+										},
+										{
+											"source": {
+												"name": "Requester Email Address",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 134
+											}
+										},
+										{
+											"source": {
+												"name": "Intercompany CrossCharge Flag",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 135
+											}
+										},
+										{
+											"source": {
+												"name": "Remit-to Digital Account",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 136
+											}
+										},
+										{
+											"source": {
+												"name": "ENDROW",
+												"type": "String",
+												"physicalType": "varchar"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 137
+											}
+										}
+									],
+									"typeConversion": true,
+									"typeConversionSettings": {
+										"allowDataTruncation": true,
+										"treatBooleanAsNumber": false
+									}
+								}
+							},
+							"inputs": [
+								{
+									"referenceName": "df_camsis_ap_invoices_raw_table_dataset",
+									"type": "DatasetReference",
+									"parameters": {
+										"table_name": "tb_ap_invoices_staging"
+									}
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "df_camsis_ap_invoice_fbdi_csv_dataset",
+									"type": "DatasetReference",
+									"parameters": {
+										"folder_name": "csv",
+										"file_name": "ApInvoicesInterface.csv"
+									}
+								}
+							]
+						},
+						{
+							"name": "InvoiceLines_sql_to_csv",
+							"type": "Copy",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "AzureSqlSource",
+									"sqlReaderQuery": "SELECT * FROM [dbo].[vw_Invoice_Lines_FBDI]",
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"sink": {
+									"type": "DelimitedTextSink",
+									"storeSettings": {
+										"type": "AzureBlobStorageWriteSettings"
+									},
+									"formatSettings": {
+										"type": "DelimitedTextWriteSettings",
+										"quoteAllText": true,
+										"fileExtension": ".txt"
+									}
+								},
+								"enableStaging": false,
+								"translator": {
+									"type": "TabularTranslator",
+									"mappings": [
+										{
+											"source": {
+												"name": "Invoice ID",
+												"type": "String",
+												"physicalType": "varchar"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 1
+											}
+										},
+										{
+											"source": {
+												"name": "Line Number",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 2
+											}
+										},
+										{
+											"source": {
+												"name": "Line Type",
+												"type": "String",
+												"physicalType": "varchar"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 3
+											}
+										},
+										{
+											"source": {
+												"name": "Amount",
+												"type": "Decimal",
+												"physicalType": "decimal",
+												"scale": 2,
+												"precision": 12
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 4
+											}
+										},
+										{
+											"source": {
+												"name": "Invoice Quantity",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 5
+											}
+										},
+										{
+											"source": {
+												"name": "Unit Price",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 6
+											}
+										},
+										{
+											"source": {
+												"name": "UOM",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 7
+											}
+										},
+										{
+											"source": {
+												"name": "Description",
+												"type": "String",
+												"physicalType": "varchar"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 8
+											}
+										},
+										{
+											"source": {
+												"name": "PO Number",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 9
+											}
+										},
+										{
+											"source": {
+												"name": "PO Line Number",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 10
+											}
+										},
+										{
+											"source": {
+												"name": "PO Schedule Number",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 11
+											}
+										},
+										{
+											"source": {
+												"name": "PO Distribution Number",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 12
+											}
+										},
+										{
+											"source": {
+												"name": "Item Description",
+												"type": "String",
+												"physicalType": "varchar"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 13
+											}
+										},
+										{
+											"source": {
+												"name": "PO Release Number",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 14
+											}
+										},
+										{
+											"source": {
+												"name": "Purchasing Category",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 15
+											}
+										},
+										{
+											"source": {
+												"name": "Receipt Number",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 16
+											}
+										},
+										{
+											"source": {
+												"name": "Receipt Line Number",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 17
+											}
+										},
+										{
+											"source": {
+												"name": "Consumption Advice Number",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 18
+											}
+										},
+										{
+											"source": {
+												"name": "Consumption Advice Line Number",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 19
+											}
+										},
+										{
+											"source": {
+												"name": "Packing Slip",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 20
+											}
+										},
+										{
+											"source": {
+												"name": "Final Match",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 21
+											}
+										},
+										{
+											"source": {
+												"name": "Distribution Combination",
+												"type": "String",
+												"physicalType": "varchar"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 22
+											}
+										},
+										{
+											"source": {
+												"name": "Distribution Set",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 23
+											}
+										},
+										{
+											"source": {
+												"name": "Accounting Date",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 24
+											}
+										},
+										{
+											"source": {
+												"name": "Overlay Account Segment",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 25
+											}
+										},
+										{
+											"source": {
+												"name": "Overlay Primary Balancing Segment",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 26
+											}
+										},
+										{
+											"source": {
+												"name": "Overlay Cost Center Segment",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 27
+											}
+										},
+										{
+											"source": {
+												"name": "Tax Classification Code",
+												"type": "String",
+												"physicalType": "varchar"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 28
+											}
+										},
+										{
+											"source": {
+												"name": "Ship-to Location",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 29
+											}
+										},
+										{
+											"source": {
+												"name": "Ship-from Location",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 30
+											}
+										},
+										{
+											"source": {
+												"name": "Location of Final Discharge",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 31
+											}
+										},
+										{
+											"source": {
+												"name": "Transaction Business Category",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 32
+											}
+										},
+										{
+											"source": {
+												"name": "Product Fiscal Classification",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 33
+											}
+										},
+										{
+											"source": {
+												"name": "Intended Use",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 34
+											}
+										},
+										{
+											"source": {
+												"name": "User-Defined Fiscal Classification",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 35
+											}
+										},
+										{
+											"source": {
+												"name": "Product Type",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 36
+											}
+										},
+										{
+											"source": {
+												"name": "Assessable Value",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 37
+											}
+										},
+										{
+											"source": {
+												"name": "Product Category",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 38
+											}
+										},
+										{
+											"source": {
+												"name": "Tax Control Amount",
+												"type": "Decimal",
+												"physicalType": "decimal",
+												"scale": 2,
+												"precision": 12
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 39
+											}
+										},
+										{
+											"source": {
+												"name": "Tax Regime Code",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 40
+											}
+										},
+										{
+											"source": {
+												"name": "Tax",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 41
+											}
+										},
+										{
+											"source": {
+												"name": "Tax Status Code",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 42
+											}
+										},
+										{
+											"source": {
+												"name": "Tax Jurisdiction Code",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 43
+											}
+										},
+										{
+											"source": {
+												"name": "Tax Rate Code",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 44
+											}
+										},
+										{
+											"source": {
+												"name": "Tax Rate",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 45
+											}
+										},
+										{
+											"source": {
+												"name": "Withholding Tax Group",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 46
+											}
+										},
+										{
+											"source": {
+												"name": "Income Tax Type",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 47
+											}
+										},
+										{
+											"source": {
+												"name": "Income Tax Region",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 48
+											}
+										},
+										{
+											"source": {
+												"name": "Prorate Across All Item Lines",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 49
+											}
+										},
+										{
+											"source": {
+												"name": "Line Group Number",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 50
+											}
+										},
+										{
+											"source": {
+												"name": "Cost Factor Name",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 51
+											}
+										},
+										{
+											"source": {
+												"name": "Statistical Quantity",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 52
+											}
+										},
+										{
+											"source": {
+												"name": "Track as Asset",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 53
+											}
+										},
+										{
+											"source": {
+												"name": "Asset Book Type Code",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 54
+											}
+										},
+										{
+											"source": {
+												"name": "Asset Category ID",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 55
+											}
+										},
+										{
+											"source": {
+												"name": "Serial Number",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 56
+											}
+										},
+										{
+											"source": {
+												"name": "Manufacturer",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 57
+											}
+										},
+										{
+											"source": {
+												"name": "Model Number",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 58
+											}
+										},
+										{
+											"source": {
+												"name": "Warranty Number",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 59
+											}
+										},
+										{
+											"source": {
+												"name": "Price Correction Line",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 60
+											}
+										},
+										{
+											"source": {
+												"name": "Price Correction Invoice Number",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 61
+											}
+										},
+										{
+											"source": {
+												"name": "Price Correction Invoice Line Number",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 62
+											}
+										},
+										{
+											"source": {
+												"name": "Requester First Name",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 63
+											}
+										},
+										{
+											"source": {
+												"name": "Requester Last Name",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 64
+											}
+										},
+										{
+											"source": {
+												"name": "Requester Employee Number",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 65
+											}
+										},
+										{
+											"source": {
+												"name": "Attribute Category",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 66
+											}
+										},
+										{
+											"source": {
+												"name": "Attribute 1",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 67
+											}
+										},
+										{
+											"source": {
+												"name": "Attribute 2",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 68
+											}
+										},
+										{
+											"source": {
+												"name": "Attribute 3",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 69
+											}
+										},
+										{
+											"source": {
+												"name": "Attribute 4",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 70
+											}
+										},
+										{
+											"source": {
+												"name": "Attribute 5",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 71
+											}
+										},
+										{
+											"source": {
+												"name": "Attribute 6",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 72
+											}
+										},
+										{
+											"source": {
+												"name": "Attribute 7",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 73
+											}
+										},
+										{
+											"source": {
+												"name": "Attribute 8",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 74
+											}
+										},
+										{
+											"source": {
+												"name": "Attribute 9",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 75
+											}
+										},
+										{
+											"source": {
+												"name": "Attribute 10",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 76
+											}
+										},
+										{
+											"source": {
+												"name": "Attribute 11",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 77
+											}
+										},
+										{
+											"source": {
+												"name": "Attribute 12",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 78
+											}
+										},
+										{
+											"source": {
+												"name": "Attribute 13",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 79
+											}
+										},
+										{
+											"source": {
+												"name": "Attribute 14",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 80
+											}
+										},
+										{
+											"source": {
+												"name": "Attribute 15",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 81
+											}
+										},
+										{
+											"source": {
+												"name": "Attribute Number 1",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 82
+											}
+										},
+										{
+											"source": {
+												"name": "Attribute Number 2",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 83
+											}
+										},
+										{
+											"source": {
+												"name": "Attribute Number 3",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 84
+											}
+										},
+										{
+											"source": {
+												"name": "Attribute Number 4",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 85
+											}
+										},
+										{
+											"source": {
+												"name": "Attribute Number 5",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 86
+											}
+										},
+										{
+											"source": {
+												"name": "Attribute Date 1",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 87
+											}
+										},
+										{
+											"source": {
+												"name": "Attribute Date 2",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 88
+											}
+										},
+										{
+											"source": {
+												"name": "Attribute Date 3",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 89
+											}
+										},
+										{
+											"source": {
+												"name": "Attribute Date 4",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 90
+											}
+										},
+										{
+											"source": {
+												"name": "Attribute Date 5",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 91
+											}
+										},
+										{
+											"source": {
+												"name": "Global Attribute Category",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 92
+											}
+										},
+										{
+											"source": {
+												"name": "Global Attribute 1",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 93
+											}
+										},
+										{
+											"source": {
+												"name": "Global Attribute 2",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 94
+											}
+										},
+										{
+											"source": {
+												"name": "Global Attribute 3",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 95
+											}
+										},
+										{
+											"source": {
+												"name": "Global Attribute 4",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 96
+											}
+										},
+										{
+											"source": {
+												"name": "Global Attribute 5",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 97
+											}
+										},
+										{
+											"source": {
+												"name": "Global Attribute 6",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 98
+											}
+										},
+										{
+											"source": {
+												"name": "Global Attribute 7",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 99
+											}
+										},
+										{
+											"source": {
+												"name": "Global Attribute 8",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 100
+											}
+										},
+										{
+											"source": {
+												"name": "Global Attribute 9",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 101
+											}
+										},
+										{
+											"source": {
+												"name": "Global Attribute 10",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 102
+											}
+										},
+										{
+											"source": {
+												"name": "Global Attribute 11",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 103
+											}
+										},
+										{
+											"source": {
+												"name": "Global Attribute 12",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 104
+											}
+										},
+										{
+											"source": {
+												"name": "Global Attribute 13",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 105
+											}
+										},
+										{
+											"source": {
+												"name": "Global Attribute 14",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 106
+											}
+										},
+										{
+											"source": {
+												"name": "Global Attribute 15",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 107
+											}
+										},
+										{
+											"source": {
+												"name": "Global Attribute 16",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 108
+											}
+										},
+										{
+											"source": {
+												"name": "Global Attribute 17",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 109
+											}
+										},
+										{
+											"source": {
+												"name": "Global Attribute 18",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 110
+											}
+										},
+										{
+											"source": {
+												"name": "Global Attribute 19",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 111
+											}
+										},
+										{
+											"source": {
+												"name": "Global Attribute 20",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 112
+											}
+										},
+										{
+											"source": {
+												"name": "Global Attribute Number 1",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 113
+											}
+										},
+										{
+											"source": {
+												"name": "Global Attribute Number 2",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 114
+											}
+										},
+										{
+											"source": {
+												"name": "Global Attribute Number 3",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 115
+											}
+										},
+										{
+											"source": {
+												"name": "Global Attribute Number 4",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 116
+											}
+										},
+										{
+											"source": {
+												"name": "Global Attribute Number 5",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 117
+											}
+										},
+										{
+											"source": {
+												"name": "Global Attribute Date 1",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 118
+											}
+										},
+										{
+											"source": {
+												"name": "Global Attribute Date 2",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 119
+											}
+										},
+										{
+											"source": {
+												"name": "Global Attribute Date 3",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 120
+											}
+										},
+										{
+											"source": {
+												"name": "Global Attribute Date 4",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 121
+											}
+										},
+										{
+											"source": {
+												"name": "Global Attribute Date 5",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 122
+											}
+										},
+										{
+											"source": {
+												"name": "Project ID",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 123
+											}
+										},
+										{
+											"source": {
+												"name": "Task ID",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 124
+											}
+										},
+										{
+											"source": {
+												"name": "Expenditure Type ID",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 125
+											}
+										},
+										{
+											"source": {
+												"name": "Expenditure Item Date",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 126
+											}
+										},
+										{
+											"source": {
+												"name": "Expenditure Organization ID",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 127
+											}
+										},
+										{
+											"source": {
+												"name": "Project Number",
+												"type": "String",
+												"physicalType": "varchar"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 128
+											}
+										},
+										{
+											"source": {
+												"name": "Task Number",
+												"type": "String",
+												"physicalType": "varchar"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 129
+											}
+										},
+										{
+											"source": {
+												"name": "Expenditure Type",
+												"type": "String",
+												"physicalType": "varchar"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 130
+											}
+										},
+										{
+											"source": {
+												"name": "Expenditure Organization",
+												"type": "String",
+												"physicalType": "varchar"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 131
+											}
+										},
+										{
+											"source": {
+												"name": "Funding Source Id",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 132
+											}
+										},
+										{
+											"source": {
+												"name": "PJC Reserved Attribute 2",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 133
+											}
+										},
+										{
+											"source": {
+												"name": "PJC Reserved Attribute 3",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 134
+											}
+										},
+										{
+											"source": {
+												"name": "PJC Reserved Attribute 4",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 135
+											}
+										},
+										{
+											"source": {
+												"name": "PJC Reserved Attribute 5",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 136
+											}
+										},
+										{
+											"source": {
+												"name": "PJC Reserved Attribute 6",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 137
+											}
+										},
+										{
+											"source": {
+												"name": "PJC Reserved Attribute 7",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 138
+											}
+										},
+										{
+											"source": {
+												"name": "PJC Reserved Attribute 8",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 139
+											}
+										},
+										{
+											"source": {
+												"name": "PJC Reserved Attribute 9",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 140
+											}
+										},
+										{
+											"source": {
+												"name": "PJC Reserved Attribute 10",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 141
+											}
+										},
+										{
+											"source": {
+												"name": "PJC User Defined Attribute 1",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 142
+											}
+										},
+										{
+											"source": {
+												"name": "PJC User Defined Attribute 2",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 143
+											}
+										},
+										{
+											"source": {
+												"name": "PJC User Defined Attribute 3",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 144
+											}
+										},
+										{
+											"source": {
+												"name": "PJC User Defined Attribute 4",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 145
+											}
+										},
+										{
+											"source": {
+												"name": "PJC User Defined Attribute 5",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 146
+											}
+										},
+										{
+											"source": {
+												"name": "PJC User Defined Attribute 6",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 147
+											}
+										},
+										{
+											"source": {
+												"name": "PJC User Defined Attribute 7",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 148
+											}
+										},
+										{
+											"source": {
+												"name": "PJC User Defined Attribute 8",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 149
+											}
+										},
+										{
+											"source": {
+												"name": "PJC User Defined Attribute 9",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 150
+											}
+										},
+										{
+											"source": {
+												"name": "PJC User Defined Attribute 10",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 151
+											}
+										},
+										{
+											"source": {
+												"name": "Fiscal Charge Type",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 152
+											}
+										},
+										{
+											"source": {
+												"name": "Multiperiod Accounting Start Date",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 153
+											}
+										},
+										{
+											"source": {
+												"name": "Multiperiod Accounting End Date",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 154
+											}
+										},
+										{
+											"source": {
+												"name": "Multiperiod Accounting Accrual Account",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 155
+											}
+										},
+										{
+											"source": {
+												"name": "Project Name",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 156
+											}
+										},
+										{
+											"source": {
+												"name": "Task Name",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 157
+											}
+										},
+										{
+											"source": {
+												"name": "ENDROW",
+												"type": "String",
+												"physicalType": "varchar"
+											},
+											"sink": {
+												"type": "String",
+												"physicalType": "String",
+												"ordinal": 158
+											}
+										}
+									],
+									"typeConversion": true,
+									"typeConversionSettings": {
+										"allowDataTruncation": true,
+										"treatBooleanAsNumber": false
+									}
+								}
+							},
+							"inputs": [
+								{
+									"referenceName": "df_camsis_ap_invoices_raw_table_dataset",
+									"type": "DatasetReference",
+									"parameters": {
+										"table_name": "tb_ap_invoice_lines_staging"
+									}
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "df_camsis_ap_invoice_fbdi_csv_dataset",
+									"type": "DatasetReference",
+									"parameters": {
+										"folder_name": "csv",
+										"file_name": "ApInvoiceLinesInterface.csv"
+									}
+								}
+							]
+						},
+						{
+							"name": "File name",
+							"type": "SetVariable",
+							"dependsOn": [
+								{
+									"activity": "zip_both_csv",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "file_name",
+								"value": {
+									"value": "@split(activity('zip_both_csv').output.message,'/')[3]",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "Mark as Processed",
+							"type": "Script",
+							"dependsOn": [
+								{
+									"activity": "Load to Interface table",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"linkedServiceName": {
+								"referenceName": "uis_df_sql_linked_service",
+								"type": "LinkedServiceReference"
+							},
+							"typeProperties": {
+								"scripts": [
+									{
+										"type": "NonQuery",
+										"text": {
+											"value": "\n    UPDATE dbo.tb_ap_invoices_staging\n    SET processed_bit = 1, processed_at = GETDATE()\n    WHERE processed_bit = 0\n\n    UPDATE dbo.tb_ap_invoice_lines_staging\n    SET processed_bit = 1, processed_at = GETDATE()\n     WHERE processed_bit = 0",
+											"type": "Expression"
+										}
+									}
+								],
+								"scriptBlockExecutionTimeout": "02:00:00"
+							}
+						},
+						{
+							"name": "upload_to_ucm",
+							"type": "ExecutePipeline",
+							"dependsOn": [
+								{
+									"activity": "base64encode",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "ftp_shared_upload_to_ucm_pl",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"file_name": {
+										"value": "@variables('file_name')",
+										"type": "Expression"
+									},
+									"document_account": "fin$/payables$/import$",
+									"base64_content": {
+										"value": "@activity('base64encode').output.encoded_string",
+										"type": "Expression"
+									}
+								}
+							}
+						},
+						{
+							"name": "document_id",
+							"type": "SetVariable",
+							"dependsOn": [
+								{
+									"activity": "upload_to_ucm",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "document_id",
+								"value": {
+									"value": "@activity('upload_to_ucm').output.pipelineReturnValue.document_id",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "Load to Interface table",
+							"type": "ExecutePipeline",
+							"dependsOn": [
+								{
+									"activity": "document_id",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "ftp_shared_submit_ess_job",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"payload": {
+										"value": "{\n  \"OperationName\": \"submitESSJobRequest\",\n  \"JobPackageName\": \"/oracle/apps/ess/financials/commonModules/shared/common/interfaceLoader\",\n  \"JobDefName\": \"InterfaceLoaderController\",\n  \"ESSParameters\": \"@{concat('1,', variables('document_id'), ',N,N,Null')}\"\n}",
+										"type": "Expression"
+									}
+								}
+							}
+						},
+						{
+							"name": "Load data to AP table",
+							"type": "ExecutePipeline",
+							"dependsOn": [
+								{
+									"activity": "Load to Interface table",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "ftp_shared_submit_ess_job",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"payload": {
+										"value": "{\n  \"OperationName\": \"submitESSJobRequest\",\n  \"JobPackageName\": \"oracle/apps/ess/financials/payables/invoices/transactions\",\n  \"JobDefName\": \"APXIIMPT\",\n  \"ESSParameters\": \"@{concat('#NULL', ',', string(activity('Get BU ID').output.items[0].BusinessUnitId), ',N,', '#NULL', ',', '#NULL', ',', '#NULL', ',1000,Camsis,', '#NULL', ',N,Y,300000014466368,','#NULL', ',1')}\",\n  \"CallbackURL\": \"\"\n}",
+										"type": "Expression"
+									}
+								}
+							}
+						},
+						{
+							"name": "business_notification _log",
+							"type": "SqlServerStoredProcedure",
+							"dependsOn": [
+								{
+									"activity": "File name",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"storedProcedureName": "[dbo].[sp_business_notification_upsert]",
+								"storedProcedureParameters": {
+									"BusinessObject": {
+										"value": "AP",
+										"type": "String"
+									},
+									"DocumentId": {
+										"value": null,
+										"type": "Int32"
+									},
+									"Failure": {
+										"value": null,
+										"type": "Int32"
+									},
+									"FilePath": {
+										"value": null,
+										"type": "String"
+									},
+									"PipelineId": {
+										"value": {
+											"value": "@pipeline().RunId",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"ProcessIdBaseTable": {
+										"value": null,
+										"type": "Int32"
+									},
+									"ProcessIdInterface": {
+										"value": null,
+										"type": "Int32"
+									},
+									"Status": {
+										"value": "Zipped Successfully",
+										"type": "String"
+									},
+									"Success": {
+										"value": null,
+										"type": "Int32"
+									},
+									"To": {
+										"value": null,
+										"type": "String"
+									}
+								}
+							},
+							"linkedServiceName": {
+								"referenceName": "uis_df_sql_linked_service",
+								"type": "LinkedServiceReference"
+							}
+						},
+						{
+							"name": "UCM Load Log",
+							"type": "SqlServerStoredProcedure",
+							"dependsOn": [
+								{
+									"activity": "document_id",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"storedProcedureName": "[dbo].[sp_business_notification_upsert]",
+								"storedProcedureParameters": {
+									"BusinessObject": {
+										"value": "AP",
+										"type": "String"
+									},
+									"DocumentId": {
+										"value": {
+											"value": "@variables('document_id')",
+											"type": "Expression"
+										},
+										"type": "Int32"
+									},
+									"Failure": {
+										"value": null,
+										"type": "Int32"
+									},
+									"FilePath": {
+										"value": null,
+										"type": "String"
+									},
+									"PipelineId": {
+										"value": {
+											"value": "@pipeline().RunId",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"ProcessIdBaseTable": {
+										"value": null,
+										"type": "Int32"
+									},
+									"ProcessIdInterface": {
+										"value": null,
+										"type": "Int32"
+									},
+									"Status": {
+										"value": "Load To UCM Successful",
+										"type": "String"
+									},
+									"Success": {
+										"value": null,
+										"type": "Int32"
+									},
+									"To": {
+										"value": null,
+										"type": "String"
+									}
+								}
+							},
+							"linkedServiceName": {
+								"referenceName": "uis_df_sql_linked_service",
+								"type": "LinkedServiceReference"
+							}
+						},
+						{
+							"name": "Load To Interface Log",
+							"type": "SqlServerStoredProcedure",
+							"dependsOn": [
+								{
+									"activity": "Load to Interface table",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"storedProcedureName": "[dbo].[sp_business_notification_upsert]",
+								"storedProcedureParameters": {
+									"BusinessObject": {
+										"value": "AP",
+										"type": "String"
+									},
+									"DocumentId": {
+										"value": {
+											"value": "@variables('document_id')",
+											"type": "Expression"
+										},
+										"type": "Int32"
+									},
+									"Failure": {
+										"value": null,
+										"type": "Int32"
+									},
+									"FilePath": {
+										"value": null,
+										"type": "String"
+									},
+									"PipelineId": {
+										"value": {
+											"value": "@pipeline().RunId",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"ProcessIdBaseTable": {
+										"value": null,
+										"type": "Int32"
+									},
+									"ProcessIdInterface": {
+										"value": {
+											"value": "@activity('Load to Interface table').output.pipelineReturnValue.process_id",
+											"type": "Expression"
+										},
+										"type": "Int32"
+									},
+									"Status": {
+										"value": {
+											"value": "@concat(activity('Load to Interface table').output.pipelineReturnValue.job_name,': ', activity('Load to Interface table').output.pipelineReturnValue.final_status)",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"Success": {
+										"value": null,
+										"type": "Int32"
+									},
+									"To": {
+										"value": null,
+										"type": "String"
+									}
+								}
+							},
+							"linkedServiceName": {
+								"referenceName": "uis_df_sql_linked_service",
+								"type": "LinkedServiceReference"
+							}
+						},
+						{
+							"name": "Load To Base Table Log",
+							"type": "SqlServerStoredProcedure",
+							"dependsOn": [
+								{
+									"activity": "Load data to AP table",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"storedProcedureName": "[dbo].[sp_business_notification_upsert]",
+								"storedProcedureParameters": {
+									"BusinessObject": {
+										"value": "AP",
+										"type": "String"
+									},
+									"DocumentId": {
+										"value": {
+											"value": "@variables('document_id')",
+											"type": "Expression"
+										},
+										"type": "Int32"
+									},
+									"Failure": {
+										"value": null,
+										"type": "Int32"
+									},
+									"FilePath": {
+										"value": null,
+										"type": "String"
+									},
+									"PipelineId": {
+										"value": {
+											"value": "@pipeline().RunId",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"ProcessIdBaseTable": {
+										"value": {
+											"value": "@activity('Load data to AP table').output.pipelineReturnValue.process_id",
+											"type": "Expression"
+										},
+										"type": "Int32"
+									},
+									"ProcessIdInterface": {
+										"value": {
+											"value": "@activity('Load to Interface table').output.pipelineReturnValue.process_id",
+											"type": "Expression"
+										},
+										"type": "Int32"
+									},
+									"Status": {
+										"value": {
+											"value": "@concat(activity('Load data to AP table').output.pipelineReturnValue.job_name,': ', activity('Load data to AP table').output.pipelineReturnValue.final_status)",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"Success": {
+										"value": "1",
+										"type": "Int32"
+									},
+									"To": {
+										"value": null,
+										"type": "String"
+									}
+								}
+							},
+							"linkedServiceName": {
+								"referenceName": "uis_df_sql_linked_service",
+								"type": "LinkedServiceReference"
+							}
+						},
+						{
+							"name": "zip_both_csv",
+							"type": "AzureFunctionActivity",
+							"dependsOn": [
+								{
+									"activity": "InvoiceLines_sql_to_csv",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								},
+								{
+									"activity": "Invoices_sql_to_csv",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"functionName": "zip",
+								"body": {
+									"value": "{\n  \"source_paths\": [\"camsis/csv/ApInvoicesInterface.csv\",\"camsis/csv/ApInvoiceLinesInterface.csv\"],\n  \"target_path\": \"@{concat('camsis/zip/', formatDateTime(utcNow(), 'yyyyMMdd'), '/camsis_', formatDateTime(utcNow(), 'yyyyMMddHHmmss'), '.zip')}\"\n}",
+									"type": "Expression"
+								},
+								"method": "POST"
+							},
+							"linkedServiceName": {
+								"referenceName": "uis_shared_process_function",
+								"type": "LinkedServiceReference"
+							}
+						},
+						{
+							"name": "base64encode",
+							"type": "AzureFunctionActivity",
+							"dependsOn": [
+								{
+									"activity": "File name",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"functionName": "base64Encode",
+								"body": {
+									"value": "{\n    \"file_path\": \"@{concat('camsis/zip/',formatDateTime(utcNow(), 'yyyyMMdd'),'/', variables('file_name'))}\"\n}",
+									"type": "Expression"
+								},
+								"method": "POST"
+							},
+							"linkedServiceName": {
+								"referenceName": "uis_shared_process_function",
+								"type": "LinkedServiceReference"
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "Logging Start",
+				"type": "SqlServerStoredProcedure",
+				"dependsOn": [
+					{
+						"activity": "Check Invoices Rows",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Check Invoice Lines Rows",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Failed Invoices to Notification Table",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Get BU ID",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"storedProcedureName": "[dbo].[sp_business_notification_upsert]",
+					"storedProcedureParameters": {
+						"BusinessObject": {
+							"value": "AP",
+							"type": "String"
+						},
+						"DocumentId": {
+							"value": null,
+							"type": "Int32"
+						},
+						"Failure": {
+							"value": null,
+							"type": "Boolean"
+						},
+						"FilePath": {
+							"value": null,
+							"type": "String"
+						},
+						"PipelineId": {
+							"value": {
+								"value": "@pipeline().RunId",
+								"type": "Expression"
+							},
+							"type": "String"
+						},
+						"ProcessIdBaseTable": {
+							"value": null,
+							"type": "Int32"
+						},
+						"ProcessIdInterface": {
+							"value": null,
+							"type": "Int32"
+						},
+						"Status": {
+							"value": "in-progress",
+							"type": "String"
+						},
+						"Success": {
+							"value": null,
+							"type": "Boolean"
+						},
+						"To": {
+							"value": null,
+							"type": "String"
+						}
+					}
+				},
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				}
+			},
+			{
+				"name": "Failed Invoices to Notification Table",
+				"type": "Script",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "\nINSERT INTO [dbo].[tb_camsis_notification]\n(\n    PipelineId,\n    SupplierNumber,\n    InvoiceNumber,\n    InvoiceStatus,\n    Errors\n)\nSELECT\n    '@{pipeline().RunId}' AS PipelineId,\n    s.SupplierNumber,\n    s.InvoiceNumber,\n    s.validation_status AS InvoiceStatus,\n    'Failed At Mandatory Validations' AS Errors\nFROM dbo.tb_ap_invoices_staging AS s\nWHERE validation_status = 'Validation Failed'",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			},
+			{
+				"name": "Get BU ID",
+				"type": "WebActivity",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "GET",
+					"relativeUrl": "/crmRestApi/resources/11.13.18.05/subscriptionBusinessUnits?q=ShortCode='Academic University'"
+				},
+				"linkedServiceName": {
+					"referenceName": "uis_fusion_base_url_linked_service",
+					"type": "LinkedServiceReference"
+				}
+			}
+		],
+		"variables": {
+			"document_id": {
+				"type": "String"
+			},
+			"file_name": {
+				"type": "String"
+			}
+		},
+		"folder": {
+			"name": "df_camsis_to_fusion_ap_invoices"
+		},
+		"annotations": [],
+		"lastPublishTime": "2026-03-19T17:07:45Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

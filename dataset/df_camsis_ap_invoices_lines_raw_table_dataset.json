@@ -1,0 +1,108 @@
+{
+	"name": "df_camsis_ap_invoices_lines_raw_table_dataset",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "uis_df_sql_linked_service",
+			"type": "LinkedServiceReference"
+		},
+		"parameters": {
+			"table_name": {
+				"type": "string"
+			}
+		},
+		"folder": {
+			"name": "df_camsis_ap_invoices_inbound_datasets"
+		},
+		"annotations": [],
+		"type": "AzureSqlTable",
+		"schema": [
+			{
+				"name": "Id",
+				"type": "int",
+				"precision": 10
+			},
+			{
+				"name": "InvoiceId",
+				"type": "int",
+				"precision": 10
+			},
+			{
+				"name": "BatchId",
+				"type": "uniqueidentifier"
+			},
+			{
+				"name": "Source",
+				"type": "nvarchar"
+			},
+			{
+				"name": "InvoiceNumber",
+				"type": "nvarchar"
+			},
+			{
+				"name": "LineNumber",
+				"type": "int",
+				"precision": 10
+			},
+			{
+				"name": "LineAmount",
+				"type": "decimal",
+				"precision": 18,
+				"scale": 2
+			},
+			{
+				"name": "LineType",
+				"type": "nvarchar"
+			},
+			{
+				"name": "Description",
+				"type": "nvarchar"
+			},
+			{
+				"name": "ItemDescription",
+				"type": "nvarchar"
+			},
+			{
+				"name": "DistributionCombination",
+				"type": "nvarchar"
+			},
+			{
+				"name": "ProjectNumber",
+				"type": "nvarchar"
+			},
+			{
+				"name": "Task",
+				"type": "nvarchar"
+			},
+			{
+				"name": "ExpenditureType",
+				"type": "nvarchar"
+			},
+			{
+				"name": "ExpenditureOrganization",
+				"type": "nvarchar"
+			},
+			{
+				"name": "Award",
+				"type": "nvarchar"
+			},
+			{
+				"name": "TaxClassificationCode",
+				"type": "nvarchar"
+			},
+			{
+				"name": "TaxControlAmount",
+				"type": "decimal",
+				"precision": 18,
+				"scale": 2
+			}
+		],
+		"typeProperties": {
+			"schema": "dbo",
+			"table": {
+				"value": "@dataset().table_name",
+				"type": "Expression"
+			}
+		}
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}

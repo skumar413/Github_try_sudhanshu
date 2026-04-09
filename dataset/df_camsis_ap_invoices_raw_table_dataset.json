@@ -1,0 +1,101 @@
+{
+	"name": "df_camsis_ap_invoices_raw_table_dataset",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "uis_df_sql_linked_service",
+			"type": "LinkedServiceReference"
+		},
+		"parameters": {
+			"table_name": {
+				"type": "string"
+			}
+		},
+		"folder": {
+			"name": "df_camsis_ap_invoices_inbound_datasets"
+		},
+		"annotations": [],
+		"type": "AzureSqlTable",
+		"schema": [
+			{
+				"name": "Id",
+				"type": "int",
+				"precision": 10
+			},
+			{
+				"name": "BatchId",
+				"type": "uniqueidentifier"
+			},
+			{
+				"name": "Source",
+				"type": "nvarchar"
+			},
+			{
+				"name": "SupplierName",
+				"type": "nvarchar"
+			},
+			{
+				"name": "SupplierNumber",
+				"type": "int",
+				"precision": 10
+			},
+			{
+				"name": "InvoiceNumber",
+				"type": "nvarchar"
+			},
+			{
+				"name": "InvoiceDate",
+				"type": "nvarchar"
+			},
+			{
+				"name": "InvoiceAmount",
+				"type": "decimal",
+				"precision": 18,
+				"scale": 2
+			},
+			{
+				"name": "InvoiceCurrency",
+				"type": "nvarchar"
+			},
+			{
+				"name": "PaymentCurrency",
+				"type": "nvarchar"
+			},
+			{
+				"name": "Description",
+				"type": "nvarchar"
+			},
+			{
+				"name": "InvoiceType",
+				"type": "nvarchar"
+			},
+			{
+				"name": "BusinessUnit",
+				"type": "nvarchar"
+			},
+			{
+				"name": "SupplierSite",
+				"type": "nvarchar"
+			},
+			{
+				"name": "PaymentTerms",
+				"type": "nvarchar"
+			},
+			{
+				"name": "AccountingDate",
+				"type": "nvarchar"
+			},
+			{
+				"name": "LiabilityCombination",
+				"type": "nvarchar"
+			}
+		],
+		"typeProperties": {
+			"schema": "dbo",
+			"table": {
+				"value": "@dataset().table_name",
+				"type": "Expression"
+			}
+		}
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}

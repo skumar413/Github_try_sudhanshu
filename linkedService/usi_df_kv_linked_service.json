@@ -1,0 +1,11 @@
+{
+	"name": "usi_df_kv_linked_service",
+	"type": "Microsoft.DataFactory/factories/linkedservices",
+	"properties": {
+		"annotations": [],
+		"type": "AzureKeyVault",
+		"typeProperties": {
+			"baseUrl": "https://uis-kv-integ-poc-uks-001.vault.azure.net/"
+		}
+	}
+}

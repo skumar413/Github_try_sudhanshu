@@ -1,0 +1,1046 @@
+{
+	"name": "df_insert_invoices_to_raw_table",
+	"properties": {
+		"activities": [
+			{
+				"name": "Log Pipeline Start",
+				"type": "Script",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 1,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "@concat('INSERT INTO [dbo].[tb_integration_transaction_log] ([pipeline_name],[pipeline_run_id],[activity_name],[activity_type],[execution_status],[source_system],[target_system],[entity_name],[message]) VALUES (''', pipeline().Pipeline, ''',''', pipeline().RunId, ''',''Pipeline'',''Pipeline'',''Started'',''ADLS'',''SQL / FBDI Staging'',''SoftCo AP Invoice'',''Pipeline execution started'')')",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			},
+			{
+				"name": "Get XML Invoices",
+				"type": "GetMetadata",
+				"dependsOn": [
+					{
+						"activity": "Log Pipeline Start",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 1,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"dataset": {
+						"referenceName": "df_softco_ap_invoice_xml_dataset",
+						"type": "DatasetReference",
+						"parameters": {
+							"folder_name": "inbound",
+							"file_name": "*.xml"
+						}
+					},
+					"fieldList": [
+						"childItems"
+					],
+					"storeSettings": {
+						"type": "AzureBlobStorageReadSettings",
+						"recursive": true,
+						"enablePartitionDiscovery": false
+					}
+				}
+			},
+			{
+				"name": "Log Get XML Success",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "Get XML Invoices",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 1,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "@concat('INSERT INTO [dbo].[tb_integration_transaction_log] ([pipeline_name],[pipeline_run_id],[activity_name],[activity_type],[execution_status],[source_system],[target_system],[entity_name],[rows_read],[message]) VALUES (''', pipeline().Pipeline, ''',''', pipeline().RunId, ''',''Get XML Invoices'',''GetMetadata'',''Succeeded'',''ADLS'',''ADF'',''SoftCo AP Invoice'',', string(length(activity('Get XML Invoices').output.childItems)), ',''Retrieved XML invoice file list successfully'')')",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			},
+			{
+				"name": "Log Get XML Failure",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "Get XML Invoices",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 1,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "@concat('INSERT INTO [dbo].[tb_integration_transaction_log] ([pipeline_name],[pipeline_run_id],[activity_name],[activity_type],[execution_status],[source_system],[target_system],[entity_name],[message]) VALUES (''', pipeline().Pipeline, ''',''', pipeline().RunId, ''',''Get XML Invoices'',''GetMetadata'',''Failed'',''ADLS'',''ADF'',''SoftCo AP Invoice'',''Failed to retrieve XML invoice file list'')')",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			},
+			{
+				"name": "TRUNCATE RAW TABLES",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "Get XML Invoices",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 1,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": "TRUNCATE TABLE [dbo].[tb_softco_ap_invoice_lines_raw];\nTRUNCATE TABLE [dbo].[tb_softco_ap_invoice_header_raw];"
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			},
+			{
+				"name": "Log Truncate Success",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "TRUNCATE RAW TABLES",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 1,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "@concat('INSERT INTO [dbo].[tb_integration_transaction_log] ([pipeline_name],[pipeline_run_id],[activity_name],[activity_type],[execution_status],[source_system],[target_system],[entity_name],[message]) VALUES (''', pipeline().Pipeline, ''',''', pipeline().RunId, ''',''TRUNCATE RAW TABLES'',''Script'',''Succeeded'',''SQL'',''SQL'',''SoftCo AP Invoice'',''Raw tables truncated successfully'')')",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			},
+			{
+				"name": "Log Truncate Failure",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "TRUNCATE RAW TABLES",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 1,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "@concat('INSERT INTO [dbo].[tb_integration_transaction_log] ([pipeline_name],[pipeline_run_id],[activity_name],[activity_type],[execution_status],[source_system],[target_system],[entity_name],[message]) VALUES (''', pipeline().Pipeline, ''',''', pipeline().RunId, ''',''TRUNCATE RAW TABLES'',''Script'',''Failed'',''SQL'',''SQL'',''SoftCo AP Invoice'',''Failed to truncate raw tables'')')",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			},
+			{
+				"name": "ForEach1",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "TRUNCATE RAW TABLES",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('Get XML Invoices').output.childItems",
+						"type": "Expression"
+					},
+					"isSequential": true,
+					"activities": [
+						{
+							"name": "Log File Start",
+							"type": "Script",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 1,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"linkedServiceName": {
+								"referenceName": "uis_df_sql_linked_service",
+								"type": "LinkedServiceReference"
+							},
+							"typeProperties": {
+								"scripts": [
+									{
+										"type": "NonQuery",
+										"text": {
+											"value": "@concat('INSERT INTO [dbo].[tb_integration_transaction_log] ([pipeline_name],[pipeline_run_id],[activity_name],[activity_type],[execution_status],[source_system],[target_system],[entity_name],[file_name],[message]) VALUES (''', pipeline().Pipeline, ''',''', pipeline().RunId, ''',''Process File'',''ForEach'',''Started'',''ADLS'',''SQL / FBDI Staging'',''SoftCo AP Invoice'',''', item().name, ''',''Started processing XML file'')')",
+											"type": "Expression"
+										}
+									}
+								],
+								"scriptBlockExecutionTimeout": "02:00:00"
+							}
+						},
+						{
+							"name": "Flatten XML to Header and Lines",
+							"type": "ExecuteDataFlow",
+							"dependsOn": [
+								{
+									"activity": "Log File Start",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 1,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"dataflow": {
+									"referenceName": "df_flatten_xml_invoice_to_sql_dataflow",
+									"type": "DataFlowReference",
+									"datasetParameters": {
+										"xml": {
+											"folder_name": "inbound",
+											"file_name": {
+												"value": "@item().name",
+												"type": "Expression"
+											}
+										},
+										"xml1": {
+											"folder_name": "inbound",
+											"file_name": "@item().name"
+										},
+										"tbInvoiceLines": {
+											"table_name": "tb_softco_ap_invoice_lines_raw"
+										},
+										"tbInvoiceHeader": {
+											"table_name": "tb_softco_ap_invoice_header_raw"
+										}
+									}
+								},
+								"compute": {
+									"coreCount": 16,
+									"computeType": "General"
+								},
+								"traceLevel": "Fine"
+							}
+						},
+						{
+							"name": "Log Flatten Failure",
+							"type": "Script",
+							"dependsOn": [
+								{
+									"activity": "Flatten XML to Header and Lines",
+									"dependencyConditions": [
+										"Failed"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 1,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"linkedServiceName": {
+								"referenceName": "uis_df_sql_linked_service",
+								"type": "LinkedServiceReference"
+							},
+							"typeProperties": {
+								"scripts": [
+									{
+										"type": "NonQuery",
+										"text": {
+											"value": "@concat('INSERT INTO [dbo].[tb_integration_transaction_log] ([pipeline_name],[pipeline_run_id],[activity_name],[activity_type],[execution_status],[source_system],[target_system],[entity_name],[file_name],[message]) VALUES (''', pipeline().Pipeline, ''',''', pipeline().RunId, ''',''Flatten XML to Header and Lines'',''ExecuteDataFlow'',''Failed'',''ADLS'',''SQL Raw Tables'',''SoftCo AP Invoice'',''', item().name, ''',''Data flow flatten failed'')')",
+											"type": "Expression"
+										}
+									}
+								],
+								"scriptBlockExecutionTimeout": "02:00:00"
+							}
+						},
+						{
+							"name": "Archive XML Invoices",
+							"type": "Copy",
+							"state": "Inactive",
+							"onInactiveMarkAs": "Succeeded",
+							"dependsOn": [
+								{
+									"activity": "Flatten XML to Header and Lines",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 1,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "BinarySource",
+									"storeSettings": {
+										"type": "AzureBlobStorageReadSettings",
+										"recursive": true,
+										"deleteFilesAfterCompletion": true
+									},
+									"formatSettings": {
+										"type": "BinaryReadSettings"
+									}
+								},
+								"sink": {
+									"type": "BinarySink",
+									"storeSettings": {
+										"type": "AzureBlobStorageWriteSettings"
+									}
+								},
+								"enableStaging": false
+							},
+							"inputs": [
+								{
+									"referenceName": "df_softco_blob_dataset",
+									"type": "DatasetReference",
+									"parameters": {
+										"folder_name": "inbound",
+										"file_name": {
+											"value": "@item().name",
+											"type": "Expression"
+										}
+									}
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "df_softco_blob_dataset",
+									"type": "DatasetReference",
+									"parameters": {
+										"folder_name": {
+											"value": "@concat('archive/',formatDateTime(utcNow(), 'yyyy-MM-dd'), '/', pipeline().RunId)",
+											"type": "Expression"
+										},
+										"file_name": {
+											"value": "@item().name",
+											"type": "Expression"
+										}
+									}
+								}
+							]
+						},
+						{
+							"name": "Log Archive Failure",
+							"type": "Script",
+							"dependsOn": [
+								{
+									"activity": "Archive XML Invoices",
+									"dependencyConditions": [
+										"Failed"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 1,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"linkedServiceName": {
+								"referenceName": "uis_df_sql_linked_service",
+								"type": "LinkedServiceReference"
+							},
+							"typeProperties": {
+								"scripts": [
+									{
+										"type": "NonQuery",
+										"text": {
+											"value": "@concat('INSERT INTO [dbo].[tb_integration_transaction_log] ([pipeline_name],[pipeline_run_id],[activity_name],[activity_type],[execution_status],[source_system],[target_system],[entity_name],[file_name],[message]) VALUES (''', pipeline().Pipeline, ''',''', pipeline().RunId, ''',''Archive XML Invoices'',''Copy'',''Failed'',''ADLS Inbound'',''ADLS Archive'',''SoftCo AP Invoice'',''', item().name, ''',''Failed to archive XML invoice file'')')",
+											"type": "Expression"
+										}
+									}
+								],
+								"scriptBlockExecutionTimeout": "02:00:00"
+							}
+						},
+						{
+							"name": "Move to Interface Staging FBDI",
+							"type": "Copy",
+							"dependsOn": [
+								{
+									"activity": "Archive XML Invoices",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 1,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "AzureSqlSource",
+									"sqlReaderQuery": "SELECT * FROM [dbo].[vw_softco_ap_invoice_header_transformed]\nWHERE validation_status = 'Validation Success' ",
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"sink": {
+									"type": "AzureSqlSink",
+									"writeBehavior": "insert",
+									"sqlWriterUseTableLock": false
+								},
+								"enableStaging": false,
+								"translator": {
+									"type": "TabularTranslator",
+									"mappings": [
+										{
+											"source": {
+												"name": "bu_name",
+												"type": "String",
+												"physicalType": "nvarchar"
+											},
+											"sink": {
+												"name": "Business Unit",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "source",
+												"type": "String",
+												"physicalType": "varchar"
+											},
+											"sink": {
+												"name": "Source",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "invoice_number",
+												"type": "String",
+												"physicalType": "nvarchar"
+											},
+											"sink": {
+												"name": "Invoice Number",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "invoice_amount",
+												"type": "Decimal",
+												"physicalType": "decimal",
+												"scale": 2,
+												"precision": 18
+											},
+											"sink": {
+												"name": "Invoice Amount",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "invoice_date",
+												"type": "Date",
+												"physicalType": "date"
+											},
+											"sink": {
+												"name": "Invoice Date",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "supplier_name",
+												"type": "String",
+												"physicalType": "nvarchar"
+											},
+											"sink": {
+												"name": "Supplier Name",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "supplier_number",
+												"type": "String",
+												"physicalType": "nvarchar"
+											},
+											"sink": {
+												"name": "Supplier Number",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "supplier_site_code",
+												"type": "String",
+												"physicalType": "nvarchar"
+											},
+											"sink": {
+												"name": "Supplier Site",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "invoice_type",
+												"type": "String",
+												"physicalType": "nvarchar"
+											},
+											"sink": {
+												"name": "Invoice Type",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "payment_term",
+												"type": "String",
+												"physicalType": "nvarchar"
+											},
+											"sink": {
+												"name": "Payment Terms",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "description",
+												"type": "String",
+												"physicalType": "nvarchar"
+											},
+											"sink": {
+												"name": "Description",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "validation_status",
+												"type": "String",
+												"physicalType": "varchar"
+											},
+											"sink": {
+												"name": "ValidationStatus",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "validation_reason",
+												"type": "String",
+												"physicalType": "varchar"
+											},
+											"sink": {
+												"name": "validation_reason",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "source_transaction_reference",
+												"type": "String",
+												"physicalType": "nvarchar"
+											},
+											"sink": {
+												"name": "Attribute 2",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "accounting_date",
+												"type": "Date",
+												"physicalType": "date"
+											},
+											"sink": {
+												"name": "Accounting Date",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										}
+									],
+									"typeConversion": true,
+									"typeConversionSettings": {
+										"allowDataTruncation": true,
+										"treatBooleanAsNumber": false,
+										"dateFormat": "yyyy/MM/dd"
+									}
+								}
+							},
+							"inputs": [
+								{
+									"referenceName": "df_softco_ap_table_dataset",
+									"type": "DatasetReference",
+									"parameters": {
+										"table_name": "*"
+									}
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "df_softco_ap_table_dataset",
+									"type": "DatasetReference",
+									"parameters": {
+										"table_name": "tb_generic_ap_invoice_header_staging"
+									}
+								}
+							]
+						},
+						{
+							"name": "Log Header Staging Failure",
+							"type": "Script",
+							"dependsOn": [
+								{
+									"activity": "Move to Interface Staging FBDI",
+									"dependencyConditions": [
+										"Failed"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 1,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"linkedServiceName": {
+								"referenceName": "uis_df_sql_linked_service",
+								"type": "LinkedServiceReference"
+							},
+							"typeProperties": {
+								"scripts": [
+									{
+										"type": "NonQuery",
+										"text": {
+											"value": "@concat('INSERT INTO [dbo].[tb_integration_transaction_log] ([pipeline_name],[pipeline_run_id],[activity_name],[activity_type],[execution_status],[source_system],[target_system],[entity_name],[file_name],[message]) VALUES (''', pipeline().Pipeline, ''',''', pipeline().RunId, ''',''Move to Interface Staging FBDI'',''Copy'',''Failed'',''SQL View'',''SQL Header Staging'',''SoftCo AP Invoice'',''', item().name, ''',''Failed to move header records to FBDI staging'')')",
+											"type": "Expression"
+										}
+									}
+								],
+								"scriptBlockExecutionTimeout": "02:00:00"
+							}
+						},
+						{
+							"name": "Move to Line staging FBDI",
+							"type": "Copy",
+							"dependsOn": [
+								{
+									"activity": "Move to Interface Staging FBDI",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 1,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "AzureSqlSource",
+									"sqlReaderQuery": "SELECT\n    l.*,\n    h.[Invoice ID] AS [Invoice ID]\nFROM [dbo].[vw_softco_ap_invoice_line_transformed] l\nINNER JOIN [dbo].[tb_generic_ap_invoice_header_staging] h\n    ON l.invoice_number = h.[Invoice Number]\nWHERE l.validation_status = 'Validation Success'\n  AND h.ValidationStatus = 'Validation Success';",
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"sink": {
+									"type": "AzureSqlSink",
+									"writeBehavior": "insert",
+									"sqlWriterUseTableLock": false
+								},
+								"enableStaging": false,
+								"translator": {
+									"type": "TabularTranslator",
+									"mappings": [
+										{
+											"source": {
+												"name": "Invoice ID"
+											},
+											"sink": {
+												"name": "Invoice ID",
+												"type": "Int32",
+												"physicalType": "int"
+											}
+										},
+										{
+											"source": {
+												"name": "line_number",
+												"type": "String",
+												"physicalType": "nvarchar"
+											},
+											"sink": {
+												"name": "Line Number",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "line_type",
+												"type": "String",
+												"physicalType": "varchar"
+											},
+											"sink": {
+												"name": "Line Type",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "line_amount",
+												"type": "Decimal",
+												"physicalType": "decimal",
+												"scale": 2,
+												"precision": 18
+											},
+											"sink": {
+												"name": "Amount",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "validation_reason",
+												"type": "String",
+												"physicalType": "varchar"
+											},
+											"sink": {
+												"name": "validation_reason",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "validation_status",
+												"type": "String",
+												"physicalType": "varchar"
+											},
+											"sink": {
+												"name": "ValidationStatus",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "distribution_combination"
+											},
+											"sink": {
+												"name": "Distribution Combination",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "line_description",
+												"type": "String",
+												"physicalType": "nvarchar"
+											},
+											"sink": {
+												"name": "Description",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										}
+									],
+									"typeConversion": true,
+									"typeConversionSettings": {
+										"allowDataTruncation": true,
+										"treatBooleanAsNumber": false
+									}
+								}
+							},
+							"inputs": [
+								{
+									"referenceName": "df_softco_ap_table_dataset",
+									"type": "DatasetReference",
+									"parameters": {
+										"table_name": "*"
+									}
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "df_softco_ap_table_dataset",
+									"type": "DatasetReference",
+									"parameters": {
+										"table_name": "tb_generic_ap_invoice_lines_staging"
+									}
+								}
+							]
+						},
+						{
+							"name": "Log Line Staging Failure",
+							"type": "Script",
+							"dependsOn": [
+								{
+									"activity": "Move to Line staging FBDI",
+									"dependencyConditions": [
+										"Failed"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 1,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"linkedServiceName": {
+								"referenceName": "uis_df_sql_linked_service",
+								"type": "LinkedServiceReference"
+							},
+							"typeProperties": {
+								"scripts": [
+									{
+										"type": "NonQuery",
+										"text": {
+											"value": "@concat('INSERT INTO [dbo].[tb_integration_transaction_log] ([pipeline_name],[pipeline_run_id],[activity_name],[activity_type],[execution_status],[source_system],[target_system],[entity_name],[file_name],[message]) VALUES (''', pipeline().Pipeline, ''',''', pipeline().RunId, ''',''Move to Line staging FBDI'',''Copy'',''Failed'',''SQL View'',''SQL Line Staging'',''SoftCo AP Invoice'',''', item().name, ''',''Failed to move line records to FBDI staging'')')",
+											"type": "Expression"
+										}
+									}
+								],
+								"scriptBlockExecutionTimeout": "02:00:00"
+							}
+						},
+						{
+							"name": "Log File Success",
+							"type": "Script",
+							"dependsOn": [
+								{
+									"activity": "Move to Line staging FBDI",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 1,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"linkedServiceName": {
+								"referenceName": "uis_df_sql_linked_service",
+								"type": "LinkedServiceReference"
+							},
+							"typeProperties": {
+								"scripts": [
+									{
+										"type": "NonQuery",
+										"text": {
+											"value": "@concat('INSERT INTO [dbo].[tb_integration_transaction_log] ([pipeline_name],[pipeline_run_id],[activity_name],[activity_type],[execution_status],[source_system],[target_system],[entity_name],[file_name],[message]) VALUES (''', pipeline().Pipeline, ''',''', pipeline().RunId, ''',''Process File'',''ForEach'',''Succeeded'',''ADLS'',''SQL / FBDI Staging'',''SoftCo AP Invoice'',''', item().name, ''',''XML file processed and staged successfully'')')",
+											"type": "Expression"
+										}
+									}
+								],
+								"scriptBlockExecutionTimeout": "02:00:00"
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "Log Pipeline Success",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "ForEach1",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 1,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "@concat('INSERT INTO [dbo].[tb_integration_transaction_log] ([pipeline_name],[pipeline_run_id],[activity_name],[activity_type],[execution_status],[source_system],[target_system],[entity_name],[message]) VALUES (''', pipeline().Pipeline, ''',''', pipeline().RunId, ''',''Pipeline'',''Pipeline'',''Succeeded'',''ADLS'',''SQL / FBDI Staging'',''SoftCo AP Invoice'',''Pipeline execution completed successfully'')')",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			}
+		],
+		"folder": {
+			"name": "df_softco_to_fusion_ap_invoice"
+		},
+		"annotations": [],
+		"lastPublishTime": "2026-03-27T11:30:24Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

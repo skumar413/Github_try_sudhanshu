@@ -1,0 +1,618 @@
+{
+	"name": "df_fetch_fusion_lookup_open_account_date_extract",
+	"properties": {
+		"activities": [
+			{
+				"name": "Logging Start",
+				"type": "Script",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "@concat('INSERT INTO [dbo].[tbl_integration_transaction_log] ([pipeline_name],[pipeline_run_id],[activity_name],[activity_type],[step_name],[execution_status],[severity],[source_system],[target_system],[entity_name],[object_name],[business_key],[correlation_id],[file_name],[doc_id],[message],[error_code],[error_message],[start_time_utc],[end_time_utc],[created_by],[created_at_utc],[document_id],[status],[success_flag],[created_at],[updated_at]) VALUES (''', pipeline().Pipeline, ''',''', pipeline().RunId, ''',''Logging Start'',''Script'',''Initialize Accounting Date refresh logging'',''InProgress'',''Info'',''Oracle Fusion'',''SQL Accounting Date Tables'',''Fusion Accounting Date Refresh'',''Accounting Date Refresh'',''', pipeline().RunId, ''',''', pipeline().RunId, ''',NULL,NULL,''Fusion Accounting Date refresh started.'',NULL,NULL,SYSUTCDATETIME(),SYSUTCDATETIME(),''ADF'',SYSUTCDATETIME(),NULL,''in-progress'',NULL,GETDATE(),GETDATE())')",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			},
+			{
+				"name": "Open Accounting Period Lookup",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Logging Start",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": true
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "ftp_download_bip_report",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"payload": "{\n  \"OperationName\": \"submitESSJobRequest\",\n  \"JobPackageName\": \"/oracle/apps/ess/custom/gl_periods/\",\n  \"JobDefName\": \"UOC_FIN_SHA_GL_PERIODS_EXTRACT\",\n  \"ESSParameters\": \"\"\n}",
+						"targetDirectory": "common/temp/accounting-date/report"
+					}
+				}
+			},
+			{
+				"name": "Log Accounting Lookup Failure",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "Open Accounting Period Lookup",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "@concat('INSERT INTO [dbo].[tbl_integration_transaction_log] ([pipeline_name],[pipeline_run_id],[activity_name],[activity_type],[step_name],[execution_status],[severity],[source_system],[target_system],[entity_name],[object_name],[business_key],[correlation_id],[file_name],[doc_id],[message],[error_code],[error_message],[start_time_utc],[end_time_utc],[created_by],[created_at_utc],[document_id],[status],[success_flag],[created_at],[updated_at]) VALUES (''', pipeline().Pipeline, ''',''', pipeline().RunId, ''',''Log Accounting Lookup Failure'',''Script'',''Run accounting period extract'',''Failed'',''Error'',''Oracle Fusion'',''SQL Lookup Tables'',''Fusion Lookup Refresh'',''Accounting Period Lookup'',''accounting-period'',''', pipeline().RunId, ''',''common/temp/accounting-date/report'',NULL,''Open accounting period lookup failed.'',''ACCOUNTING_LOOKUP_FAILED'',''Open accounting period lookup failed.'',SYSUTCDATETIME(),SYSUTCDATETIME(),''ADF'',SYSUTCDATETIME(),NULL,''failed-accounting-lookup'',0,GETDATE(),GETDATE())')",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			},
+			{
+				"name": "Fail Accounting Lookup",
+				"type": "Fail",
+				"dependsOn": [
+					{
+						"activity": "Log Accounting Lookup Failure",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"message": "Open accounting period lookup failed.",
+					"errorCode": "ACCOUNTING_LOOKUP_FAILED"
+				}
+			},
+			{
+				"name": "Set Open Accounting File Name",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Open Accounting Period Lookup",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "open_accounting_date_file_name",
+					"value": {
+						"value": "@concat('open_accounting_date_master_extract_', formatDateTime(utcNow(), 'yyyyMMddHHmmss'), '.csv')",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Move Accounting Date Extract",
+				"type": "Copy",
+				"dependsOn": [
+					{
+						"activity": "Set Open Accounting File Name",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 1,
+					"retryIntervalInSeconds": 60,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "BinarySource",
+						"storeSettings": {
+							"type": "AzureBlobStorageReadSettings",
+							"recursive": true,
+							"deleteFilesAfterCompletion": true
+						},
+						"formatSettings": {
+							"type": "BinaryReadSettings"
+						}
+					},
+					"sink": {
+						"type": "BinarySink",
+						"storeSettings": {
+							"type": "AzureBlobStorageWriteSettings"
+						}
+					},
+					"enableStaging": false
+				},
+				"inputs": [
+					{
+						"referenceName": "df_common_blob_dataset",
+						"type": "DatasetReference",
+						"parameters": {
+							"folder_name": "temp/accounting-date/report/Report",
+							"file_name": {
+								"value": "@activity('Open Accounting Period Lookup').output.pipelineReturnValue.file_name",
+								"type": "Expression"
+							}
+						}
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "df_common_blob_dataset",
+						"type": "DatasetReference",
+						"parameters": {
+							"folder_name": "accounting-date-extract",
+							"file_name": {
+								"value": "@variables('open_accounting_date_file_name')",
+								"type": "Expression"
+							}
+						}
+					}
+				]
+			},
+			{
+				"name": "Log Accounting Move Failure",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "Move Accounting Date Extract",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "@concat('INSERT INTO [dbo].[tbl_integration_transaction_log] ([pipeline_name],[pipeline_run_id],[activity_name],[activity_type],[step_name],[execution_status],[severity],[source_system],[target_system],[entity_name],[object_name],[business_key],[correlation_id],[file_name],[doc_id],[message],[error_code],[error_message],[start_time_utc],[end_time_utc],[created_by],[created_at_utc],[document_id],[status],[success_flag],[created_at],[updated_at]) VALUES (''', pipeline().Pipeline, ''',''', pipeline().RunId, ''',''Log Accounting Move Failure'',''Script'',''Move accounting date extract file'',''Failed'',''Error'',''Oracle Fusion'',''SQL Lookup Tables'',''Fusion Lookup Refresh'',''accounting-date-extract'',''', activity('Open Accounting Period Lookup').output.pipelineReturnValue.process_id, ''',''', pipeline().RunId, ''',''', variables('open_accounting_date_file_name'), ''',''', activity('Open Accounting Period Lookup').output.pipelineReturnValue.process_id, ''',''Moving accounting-date extract failed.'',''ACCOUNTING_MOVE_FAILED'',''Moving accounting-date extract failed.'',SYSUTCDATETIME(),SYSUTCDATETIME(),''ADF'',SYSUTCDATETIME(),''', activity('Open Accounting Period Lookup').output.pipelineReturnValue.process_id, ''',''failed-accounting-file-move'',0,GETDATE(),GETDATE())')",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			},
+			{
+				"name": "Fail Accounting Move",
+				"type": "Fail",
+				"dependsOn": [
+					{
+						"activity": "Log Accounting Move Failure",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"message": "Moving accounting-date extract failed.",
+					"errorCode": "ACCOUNTING_MOVE_FAILED"
+				}
+			},
+			{
+				"name": "Insert Accounting Date into SQL",
+				"type": "Copy",
+				"dependsOn": [
+					{
+						"activity": "Move Accounting Date Extract",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 1,
+					"retryIntervalInSeconds": 60,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "DelimitedTextSource",
+						"storeSettings": {
+							"type": "AzureBlobStorageReadSettings",
+							"recursive": true,
+							"enablePartitionDiscovery": false
+						},
+						"formatSettings": {
+							"type": "DelimitedTextReadSettings"
+						}
+					},
+					"sink": {
+						"type": "AzureSqlSink",
+						"preCopyScript": "TRUNCATE TABLE [dbo].[tbl_open_accounting_period]",
+						"writeBehavior": "insert",
+						"sqlWriterUseTableLock": false,
+						"disableMetricsCollection": false
+					},
+					"enableStaging": false,
+					"translator": {
+						"type": "TabularTranslator",
+						"mappings": [
+							{
+								"source": {
+									"name": "PERIOD_NAME",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "PERIOD_NAME",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "CLOSING_STATUS",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "CLOSING_STATUS",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "START_DATE",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "START_DATE",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "END_DATE",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "END_DATE",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "PERIOD_TYPE",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "PERIOD_TYPE",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "PERIOD_YEAR",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "PERIOD_YEAR",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "PERIOD_NUM",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "PERIOD_NUM",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "ADJUSTMENT_PERIOD_FLAG",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "ADJUSTMENT_PERIOD_FLAG",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "CREATION_DATE",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "CREATION_DATE",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "CREATED_BY",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "CREATED_BY",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "LEDGER_ID",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "LEDGER_ID",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "APPLICATION_SHORT_NAME",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "APPLICATION_SHORT_NAME",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							}
+						],
+						"typeConversion": true,
+						"typeConversionSettings": {
+							"allowDataTruncation": false,
+							"treatBooleanAsNumber": false
+						}
+					}
+				},
+				"inputs": [
+					{
+						"referenceName": "common_lookup_storage_dataset",
+						"type": "DatasetReference",
+						"parameters": {
+							"folder_name": "accounting-date-extract",
+							"file_name": {
+								"value": "@variables('open_accounting_date_file_name')",
+								"type": "Expression"
+							}
+						}
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "df_payment_status_table",
+						"type": "DatasetReference",
+						"parameters": {
+							"table_name": "tbl_open_accounting_period"
+						}
+					}
+				]
+			},
+			{
+				"name": "Log Accounting SQL Load Failure",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "Insert Accounting Date into SQL",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "@concat('INSERT INTO [dbo].[tbl_integration_transaction_log] ([pipeline_name],[pipeline_run_id],[activity_name],[activity_type],[step_name],[execution_status],[severity],[source_system],[target_system],[entity_name],[object_name],[business_key],[correlation_id],[file_name],[doc_id],[message],[error_code],[error_message],[start_time_utc],[end_time_utc],[created_by],[created_at_utc],[document_id],[status],[success_flag],[created_at],[updated_at]) VALUES (''', pipeline().Pipeline, ''',''', pipeline().RunId, ''',''Log Accounting SQL Load Failure'',''Script'',''Load accounting date extract into SQL'',''Failed'',''Error'',''Oracle Fusion'',''SQL Lookup Tables'',''Fusion Lookup Refresh'',''tbl_open_accounting_period'',''', activity('Open Accounting Period Lookup').output.pipelineReturnValue.process_id, ''',''', pipeline().RunId, ''',''', variables('open_accounting_date_file_name'), ''',''', activity('Open Accounting Period Lookup').output.pipelineReturnValue.process_id, ''',''Loading accounting-date extract into SQL failed.'',''ACCOUNTING_SQL_LOAD_FAILED'',''Loading accounting-date extract into SQL failed.'',SYSUTCDATETIME(),SYSUTCDATETIME(),''ADF'',SYSUTCDATETIME(),''', activity('Open Accounting Period Lookup').output.pipelineReturnValue.process_id, ''',''failed-accounting-sql-load'',0,GETDATE(),GETDATE())')",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			},
+			{
+				"name": "Fail Accounting SQL Load",
+				"type": "Fail",
+				"dependsOn": [
+					{
+						"activity": "Log Accounting SQL Load Failure",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"message": "Loading accounting-date extract into SQL failed.",
+					"errorCode": "ACCOUNTING_SQL_LOAD_FAILED"
+				}
+			},
+			{
+				"name": "Update Accounting BIP Extract Status",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "Insert Accounting Date into SQL",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 1,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "@concat('INSERT INTO [dbo].[tbl_integration_transaction_log] ([pipeline_name],[pipeline_run_id],[activity_name],[activity_type],[step_name],[execution_status],[severity],[source_system],[target_system],[entity_name],[object_name],[business_key],[correlation_id],[file_name],[doc_id],[message],[error_code],[error_message],[start_time_utc],[end_time_utc],[created_by],[created_at_utc],[document_id],[status],[success_flag],[created_at],[updated_at]) VALUES (''', pipeline().Pipeline, ''',''', pipeline().RunId, ''',''Update Accounting BIP Extract Status'',''Script'',''Complete accounting period lookup refresh'',''Succeeded'',''Info'',''Oracle Fusion'',''SQL Lookup Tables'',''Fusion Lookup Refresh'',''tbl_open_accounting_period'',''', activity('Open Accounting Period Lookup').output.pipelineReturnValue.process_id, ''',''', pipeline().RunId, ''',''', variables('open_accounting_date_file_name'), ''',''', activity('Open Accounting Period Lookup').output.pipelineReturnValue.process_id, ''',''Accounting period lookup refresh completed successfully.'',NULL,NULL,SYSUTCDATETIME(),SYSUTCDATETIME(),''ADF'',SYSUTCDATETIME(),''', activity('Open Accounting Period Lookup').output.pipelineReturnValue.process_id, ''',''', activity('Open Accounting Period Lookup').output.pipelineReturnValue.final_status, ''',1,GETDATE(),GETDATE())')",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			},
+			{
+				"name": "Log Pipeline Success",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "Update Accounting BIP Extract Status",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "@concat('INSERT INTO [dbo].[tbl_integration_transaction_log] ([pipeline_name],[pipeline_run_id],[activity_name],[activity_type],[step_name],[execution_status],[severity],[source_system],[target_system],[entity_name],[object_name],[business_key],[correlation_id],[file_name],[doc_id],[message],[error_code],[error_message],[start_time_utc],[end_time_utc],[created_by],[created_at_utc],[document_id],[status],[success_flag],[created_at],[updated_at]) VALUES (''', pipeline().Pipeline, ''',''', pipeline().RunId, ''',''Log Pipeline Success'',''Script'',''Complete Accounting Date refresh pipeline'',''Succeeded'',''Info'',''Oracle Fusion'',''SQL Accounting Date Tables'',''Fusion Accounting Date Refresh'',''Accounting Date Refresh'',''', pipeline().RunId, ''',''', pipeline().RunId, ''',NULL,NULL,''Fusion Accounting Date refresh completed successfully.'',NULL,NULL,SYSUTCDATETIME(),SYSUTCDATETIME(),''ADF'',SYSUTCDATETIME(),NULL,''completed'',1,GETDATE(),GETDATE())')",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			}
+		],
+		"variables": {
+			"supllier_master_file_name": {
+				"type": "String"
+			},
+			"bu_file_name": {
+				"type": "String"
+			},
+			"open_accounting_date_file_name": {
+				"type": "String"
+			}
+		},
+		"folder": {
+			"name": "df_fetch_fusion_lookup_tables"
+		},
+		"annotations": [],
+		"lastPublishTime": "2026-03-27T15:58:17Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

@@ -1,0 +1,322 @@
+{
+	"name": "df_insert_invoices_to_raw_tables",
+	"properties": {
+		"activities": [
+			{
+				"name": "Log Pipeline Start",
+				"type": "Script",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.01:00:00",
+					"retry": 1,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "@concat('IF TRY_CONVERT(uniqueidentifier, ''', pipeline().parameters.p_batch_id, ''') IS NULL THROW 51002, ''Invalid p_batch_id. Expected a GUID/uniqueidentifier value.'', 1; UPDATE [dbo].[tbl_integration_batch] SET [current_stage] = ''Load Raw Tables'', [batch_status] = ''Raw Loading'', [updated_at_utc] = SYSUTCDATETIME() WHERE [batch_id] = TRY_CONVERT(uniqueidentifier, ''', pipeline().parameters.p_batch_id, ''');')",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "00:30:00"
+				}
+			},
+			{
+				"name": "Get XML Invoices",
+				"type": "GetMetadata",
+				"dependsOn": [
+					{
+						"activity": "Log Pipeline Start",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.04:00:00",
+					"retry": 1,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"dataset": {
+						"referenceName": "df_softco_ap_invoice_xml_dataset",
+						"type": "DatasetReference",
+						"parameters": {
+							"folder_name": {
+								"value": "@concat(pipeline().parameters.p_inbound_folder, '/', pipeline().parameters.p_batch_id)",
+								"type": "Expression"
+							},
+							"file_name": "*.xml"
+						}
+					},
+					"fieldList": [
+						"childItems"
+					],
+					"storeSettings": {
+						"type": "AzureBlobStorageReadSettings",
+						"recursive": true,
+						"enablePartitionDiscovery": false
+					}
+				}
+			},
+			{
+				"name": "Prepare Raw Load",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "Get XML Invoices",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.02:00:00",
+					"retry": 1,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "@concat('IF ', string(length(activity('Get XML Invoices').output.childItems)), ' > 0 BEGIN TRUNCATE TABLE [dbo].[tbl_softco_ap_invoice_lines_raw]; TRUNCATE TABLE [dbo].[tbl_softco_ap_invoice_header_raw]; UPDATE [dbo].[tbl_integration_batch] SET [batch_status] = ''Raw Loading'', [current_stage] = ''Load Raw Tables'', [updated_at_utc] = SYSUTCDATETIME() WHERE [batch_id] = TRY_CONVERT(uniqueidentifier, ''', pipeline().parameters.p_batch_id, '''); END ELSE BEGIN UPDATE [dbo].[tbl_integration_batch] SET [batch_status] = ''No Files'', [current_stage] = ''Load Raw Tables'', [updated_at_utc] = SYSUTCDATETIME() WHERE [batch_id] = TRY_CONVERT(uniqueidentifier, ''', pipeline().parameters.p_batch_id, '''); END;')",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "00:30:00"
+				}
+			},
+			{
+				"name": "ForEach File",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "Prepare Raw Load",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('Get XML Invoices').output.childItems",
+						"type": "Expression"
+					},
+					"isSequential": true,
+					"activities": [
+						{
+							"name": "Flatten XML to Header and Lines",
+							"type": "ExecuteDataFlow",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 1,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"dataflow": {
+									"referenceName": "df_flatten_xml_invoice_to_sql_dataflow",
+									"type": "DataFlowReference",
+									"datasetParameters": {
+										"xml": {
+											"folder_name": {
+												"value": "@concat(pipeline().parameters.p_inbound_folder, '/', pipeline().parameters.p_batch_id)",
+												"type": "Expression"
+											},
+											"file_name": {
+												"value": "@item().name",
+												"type": "Expression"
+											}
+										},
+										"xml1": {
+											"folder_name": {
+												"value": "@concat(pipeline().parameters.p_inbound_folder, '/', pipeline().parameters.p_batch_id)",
+												"type": "Expression"
+											},
+											"file_name": {
+												"value": "@item().name",
+												"type": "Expression"
+											}
+										},
+										"tbInvoiceLines": {
+											"table_name": "tbl_softco_ap_invoice_lines_raw"
+										},
+										"tbInvoiceHeader": {
+											"table_name": "tbl_softco_ap_invoice_header_raw"
+										}
+									}
+								},
+								"compute": {
+									"coreCount": 16,
+									"computeType": "General"
+								},
+								"traceLevel": "Fine"
+							}
+						},
+						{
+							"name": "Archive XML Invoices",
+							"type": "Copy",
+							"dependsOn": [
+								{
+									"activity": "Flatten XML to Header and Lines",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.04:00:00",
+								"retry": 1,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "BinarySource",
+									"storeSettings": {
+										"type": "AzureBlobStorageReadSettings",
+										"recursive": false,
+										"deleteFilesAfterCompletion": true
+									},
+									"formatSettings": {
+										"type": "BinaryReadSettings"
+									}
+								},
+								"sink": {
+									"type": "BinarySink",
+									"storeSettings": {
+										"type": "AzureBlobStorageWriteSettings"
+									}
+								},
+								"enableStaging": false
+							},
+							"inputs": [
+								{
+									"referenceName": "df_softco_blob_dataset",
+									"type": "DatasetReference",
+									"parameters": {
+										"folder_name": {
+											"value": "@concat(pipeline().parameters.p_inbound_folder, '/', pipeline().parameters.p_batch_id)",
+											"type": "Expression"
+										},
+										"file_name": {
+											"value": "@item().name",
+											"type": "Expression"
+										}
+									}
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "df_softco_blob_dataset",
+									"type": "DatasetReference",
+									"parameters": {
+										"folder_name": {
+											"value": "@concat(pipeline().parameters.p_archive_folder_root, '/', formatDateTime(utcNow(), 'yyyy-MM-dd'), '/', pipeline().parameters.p_batch_id)",
+											"type": "Expression"
+										},
+										"file_name": {
+											"value": "@item().name",
+											"type": "Expression"
+										}
+									}
+								}
+							]
+						}
+					]
+				}
+			},
+			{
+				"name": "Log Pipeline Success",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "ForEach File",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.01:00:00",
+					"retry": 1,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "@concat('UPDATE [dbo].[tbl_integration_batch] SET [raw_file_count] = ', string(length(activity('Get XML Invoices').output.childItems)), ', [updated_at_utc] = SYSUTCDATETIME() WHERE [batch_id] = TRY_CONVERT(uniqueidentifier, ''', pipeline().parameters.p_batch_id, ''');')",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "00:30:00"
+				}
+			}
+		],
+		"parameters": {
+			"p_batch_id": {
+				"type": "String"
+			},
+			"p_source_system": {
+				"type": "String",
+				"defaultValue": "SoftCo"
+			},
+			"p_entity_name": {
+				"type": "String",
+				"defaultValue": "AP Invoice"
+			},
+			"p_inbound_folder": {
+				"type": "String",
+				"defaultValue": "inbound"
+			},
+			"p_archive_folder_root": {
+				"type": "String",
+				"defaultValue": "archive"
+			}
+		},
+		"folder": {
+			"name": "df_softco_to_fusion_ap_invoice_inbound_integration (IN-04)/stage1 - to be triggered every 30 mins"
+		},
+		"annotations": [],
+		"lastPublishTime": "2026-03-27T18:36:25Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

@@ -1,0 +1,685 @@
+{
+	"name": "flatten_each_json_files",
+	"properties": {
+		"activities": [
+			{
+				"name": "Import Each Json To Raw table",
+				"type": "ForEach",
+				"dependsOn": [],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@pipeline().parameters.json_file_list",
+						"type": "Expression"
+					},
+					"isSequential": true,
+					"activities": [
+						{
+							"name": "Archive Json",
+							"type": "Copy",
+							"dependsOn": [
+								{
+									"activity": "Flatten Invoice",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								},
+								{
+									"activity": "flatten invoice lines",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								},
+								{
+									"activity": "Flatten Invoice Lines_copy1",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "JsonSource",
+									"storeSettings": {
+										"type": "AzureBlobStorageReadSettings",
+										"recursive": true,
+										"enablePartitionDiscovery": false
+									},
+									"formatSettings": {
+										"type": "JsonReadSettings"
+									}
+								},
+								"sink": {
+									"type": "JsonSink",
+									"storeSettings": {
+										"type": "AzureBlobStorageWriteSettings"
+									},
+									"formatSettings": {
+										"type": "JsonWriteSettings"
+									}
+								},
+								"enableStaging": false
+							},
+							"inputs": [
+								{
+									"referenceName": "df_camsis_inbound_blob_storage_dataset",
+									"type": "DatasetReference",
+									"parameters": {
+										"folder_name": "raw",
+										"file_name": {
+											"value": "@item().name",
+											"type": "Expression"
+										}
+									}
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "df_camsis_inbound_blob_storage_dataset",
+									"type": "DatasetReference",
+									"parameters": {
+										"folder_name": "archive",
+										"file_name": {
+											"value": "@item().name",
+											"type": "Expression"
+										}
+									}
+								}
+							]
+						},
+						{
+							"name": "Delete File",
+							"type": "Delete",
+							"dependsOn": [
+								{
+									"activity": "Archive Json",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"dataset": {
+									"referenceName": "df_camsis_inbound_blob_storage_dataset",
+									"type": "DatasetReference",
+									"parameters": {
+										"folder_name": "raw",
+										"file_name": {
+											"value": "@item().name",
+											"type": "Expression"
+										}
+									}
+								},
+								"enableLogging": false,
+								"storeSettings": {
+									"type": "AzureBlobStorageReadSettings",
+									"recursive": true,
+									"enablePartitionDiscovery": false
+								}
+							}
+						},
+						{
+							"name": "Flatten Invoice",
+							"type": "Copy",
+							"state": "Inactive",
+							"onInactiveMarkAs": "Succeeded",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "JsonSource",
+									"storeSettings": {
+										"type": "AzureBlobStorageReadSettings",
+										"recursive": true,
+										"enablePartitionDiscovery": false
+									},
+									"formatSettings": {
+										"type": "JsonReadSettings"
+									}
+								},
+								"sink": {
+									"type": "AzureSqlSink",
+									"writeBehavior": "insert",
+									"sqlWriterUseTableLock": false,
+									"disableMetricsCollection": false
+								},
+								"enableStaging": false,
+								"translator": {
+									"type": "TabularTranslator",
+									"mappings": [
+										{
+											"source": {
+												"path": "$['BatchId']"
+											},
+											"sink": {
+												"name": "BatchId",
+												"type": "String"
+											}
+										},
+										{
+											"source": {
+												"path": "$['SourceSystem']"
+											},
+											"sink": {
+												"name": "Source",
+												"type": "String"
+											}
+										},
+										{
+											"source": {
+												"path": "['Supplier']['SupplierName']"
+											},
+											"sink": {
+												"name": "SupplierName",
+												"type": "String"
+											}
+										},
+										{
+											"source": {
+												"path": "['Supplier']['SupplierNumber']"
+											},
+											"sink": {
+												"name": "SupplierNumber",
+												"type": "String"
+											}
+										},
+										{
+											"source": {
+												"path": "['InvoiceHeader']['InvoiceNumber']"
+											},
+											"sink": {
+												"name": "InvoiceNumber",
+												"type": "String"
+											}
+										},
+										{
+											"source": {
+												"path": "['InvoiceHeader']['InvoiceDate']"
+											},
+											"sink": {
+												"name": "InvoiceDate",
+												"type": "String"
+											}
+										},
+										{
+											"source": {
+												"path": "['InvoiceHeader']['InvoiceAmount']"
+											},
+											"sink": {
+												"name": "InvoiceAmount",
+												"type": "Decimal"
+											}
+										},
+										{
+											"source": {
+												"path": "['InvoiceHeader']['InvoiceCurrency']"
+											},
+											"sink": {
+												"name": "InvoiceCurrency",
+												"type": "String"
+											}
+										},
+										{
+											"source": {
+												"path": "['InvoiceHeader']['Description']"
+											},
+											"sink": {
+												"name": "Description",
+												"type": "String"
+											}
+										},
+										{
+											"source": {
+												"path": "['Metadata']['UniqueIdentifier']"
+											},
+											"sink": {
+												"name": "MetdataUniqueIdentifier",
+												"type": "String"
+											}
+										}
+									],
+									"collectionReference": "$['Invoices']",
+									"mapComplexValuesToString": false
+								}
+							},
+							"inputs": [
+								{
+									"referenceName": "df_camsis_inbound_blob_storage_dataset",
+									"type": "DatasetReference",
+									"parameters": {
+										"folder_name": "raw",
+										"file_name": "@item().name"
+									}
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "df_camsis_ap_invoices_raw_table_dataset",
+									"type": "DatasetReference",
+									"parameters": {
+										"table_name": "tb_camsis_ap_invoices_raw"
+									}
+								}
+							]
+						},
+						{
+							"name": "flatten invoice lines",
+							"type": "Copy",
+							"state": "Inactive",
+							"onInactiveMarkAs": "Succeeded",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "JsonSource",
+									"storeSettings": {
+										"type": "AzureBlobStorageReadSettings",
+										"recursive": true,
+										"enablePartitionDiscovery": false
+									},
+									"formatSettings": {
+										"type": "JsonReadSettings"
+									}
+								},
+								"sink": {
+									"type": "AzureSqlSink",
+									"writeBehavior": "insert",
+									"sqlWriterUseTableLock": false,
+									"disableMetricsCollection": false
+								},
+								"enableStaging": false,
+								"translator": {
+									"type": "TabularTranslator",
+									"mappings": [
+										{
+											"source": {
+												"path": "$['BatchId']"
+											},
+											"sink": {
+												"name": "BatchId",
+												"type": "String"
+											}
+										},
+										{
+											"source": {
+												"path": "$['SourceSystem']"
+											},
+											"sink": {
+												"name": "Source",
+												"type": "String"
+											}
+										},
+										{
+											"source": {
+												"path": "['LineNumber']"
+											},
+											"sink": {
+												"name": "LineNumber",
+												"type": "Int32"
+											}
+										},
+										{
+											"source": {
+												"path": "['LineAmount']"
+											},
+											"sink": {
+												"name": "LineAmount",
+												"type": "Decimal"
+											}
+										},
+										{
+											"source": {
+												"path": "['LineType']"
+											},
+											"sink": {
+												"name": "LineType",
+												"type": "String"
+											}
+										},
+										{
+											"source": {
+												"path": "['Description']"
+											},
+											"sink": {
+												"name": "Description",
+												"type": "String"
+											}
+										},
+										{
+											"source": {
+												"path": "['DistributionCombination']"
+											},
+											"sink": {
+												"name": "DistributionCombination",
+												"type": "String"
+											}
+										},
+										{
+											"source": {
+												"path": "['ProjectNumber']"
+											},
+											"sink": {
+												"name": "ProjectNumber",
+												"type": "String"
+											}
+										},
+										{
+											"source": {
+												"path": "['Task']"
+											},
+											"sink": {
+												"name": "Task",
+												"type": "String"
+											}
+										},
+										{
+											"source": {
+												"path": "['ExpenditureType']"
+											},
+											"sink": {
+												"name": "ExpenditureType",
+												"type": "String"
+											}
+										},
+										{
+											"source": {
+												"path": "['ExpenditureOrganization']"
+											},
+											"sink": {
+												"name": "ExpenditureOrganization",
+												"type": "String"
+											}
+										},
+										{
+											"source": {
+												"path": "['Award']"
+											},
+											"sink": {
+												"name": "Award",
+												"type": "String"
+											}
+										},
+										{
+											"source": {
+												"path": "['InvoiceHeader']['InvoiceNumber']"
+											},
+											"sink": {
+												"name": "InvoiceNumber"
+											}
+										}
+									],
+									"collectionReference": "$['Invoices'][*]['InvoiceHeader']['InvoiceLines']",
+									"mapComplexValuesToString": true
+								}
+							},
+							"inputs": [
+								{
+									"referenceName": "df_camsis_inbound_blob_storage_dataset",
+									"type": "DatasetReference",
+									"parameters": {
+										"folder_name": "raw",
+										"file_name": "@item().name"
+									}
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "df_camsis_ap_invoices_raw_table_dataset",
+									"type": "DatasetReference",
+									"parameters": {
+										"table_name": "tb_camsis_ap_invoice_lines_raw"
+									}
+								}
+							]
+						},
+						{
+							"name": "Invoice Headers",
+							"type": "Copy",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "JsonSource",
+									"storeSettings": {
+										"type": "AzureBlobStorageReadSettings",
+										"recursive": true,
+										"enablePartitionDiscovery": false
+									},
+									"formatSettings": {
+										"type": "JsonReadSettings"
+									}
+								},
+								"sink": {
+									"type": "AzureSqlSink",
+									"preCopyScript": "TRUNCATE TABLE tb_ap_invoices_temp",
+									"writeBehavior": "insert",
+									"sqlWriterUseTableLock": false,
+									"disableMetricsCollection": false
+								},
+								"enableStaging": false,
+								"translator": {
+									"type": "TabularTranslator",
+									"mappings": [
+										{
+											"source": {
+												"path": "$['BatchId']"
+											},
+											"sink": {
+												"name": "Batch_Id",
+												"type": "String"
+											}
+										},
+										{
+											"source": {
+												"path": "$['SourceSystem']"
+											},
+											"sink": {
+												"name": "Source",
+												"type": "String"
+											}
+										},
+										{
+											"source": {
+												"path": "['Supplier']['SupplierName']"
+											},
+											"sink": {
+												"name": "Supplier_Name",
+												"type": "String"
+											}
+										},
+										{
+											"source": {
+												"path": "['Supplier']['SupplierNumber']"
+											},
+											"sink": {
+												"name": "Supplier_Number",
+												"type": "String"
+											}
+										},
+										{
+											"source": {
+												"path": "['Supplier']['SupplierIdentifier']"
+											},
+											"sink": {
+												"name": "Supplier_Identifier",
+												"type": "String"
+											}
+										},
+										{
+											"source": {
+												"path": "['InvoiceHeader']['InvoiceNumber']"
+											},
+											"sink": {
+												"name": "Invoice_Number",
+												"type": "String"
+											}
+										},
+										{
+											"source": {
+												"path": "['InvoiceHeader']['InvoiceDate']"
+											},
+											"sink": {
+												"name": "Invoice_Date",
+												"type": "String"
+											}
+										},
+										{
+											"source": {
+												"path": "['InvoiceHeader']['InvoiceAmount']"
+											},
+											"sink": {
+												"name": "Invoice_Amount",
+												"type": "Decimal"
+											}
+										},
+										{
+											"source": {
+												"path": "['InvoiceHeader']['InvoiceCurrency']"
+											},
+											"sink": {
+												"name": "Invoice_Currency",
+												"type": "String"
+											}
+										},
+										{
+											"source": {
+												"path": "['InvoiceHeader']['Description']"
+											},
+											"sink": {
+												"name": "Header_Description",
+												"type": "String"
+											}
+										},
+										{
+											"source": {
+												"path": "['InvoiceHeader']['InvoiceLines']"
+											},
+											"sink": {
+												"name": "Invoice_Lines_Json",
+												"type": "String"
+											}
+										},
+										{
+											"source": {
+												"path": "['Metadata']['UniqueIdentifier']"
+											},
+											"sink": {
+												"name": "Metadata_Unique_Identifier",
+												"type": "String"
+											}
+										}
+									],
+									"collectionReference": "$['Invoices']",
+									"mapComplexValuesToString": true
+								}
+							},
+							"inputs": [
+								{
+									"referenceName": "df_camsis_inbound_blob_storage_dataset",
+									"type": "DatasetReference",
+									"parameters": {
+										"folder_name": "raw",
+										"file_name": {
+											"value": "@item().name",
+											"type": "Expression"
+										}
+									}
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "df_camsis_ap_invoices_raw_table_dataset",
+									"type": "DatasetReference",
+									"parameters": {
+										"table_name": "tb_ap_invoices_temp"
+									}
+								}
+							]
+						},
+						{
+							"name": "Flatten Invoice Lines_copy1",
+							"type": "Script",
+							"dependsOn": [
+								{
+									"activity": "Invoice Headers",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"linkedServiceName": {
+								"referenceName": "uis_df_sql_linked_service",
+								"type": "LinkedServiceReference"
+							},
+							"typeProperties": {
+								"scripts": [
+									{
+										"type": "NonQuery",
+										"text": "INSERT INTO dbo.tb_ap_invoices_raw (Batch_Id, Source, Supplier_Name, Supplier_Number, Supplier_Identifier, Invoice_Number, Invoice_Date, Invoice_Amount, Invoice_Currency, Header_Description, Line_Number, Line_Amount, Line_Type, Line_Description, Distribution_Combination, Project_Number, Task, Expenditure_Type, Expenditure_Organization, Award, Metadata_Unique_Identifier) SELECT t.Batch_Id, t.Source, t.Supplier_Name, t.Supplier_Number, t.Supplier_Identifier, t.Invoice_Number, t.Invoice_Date, t.Invoice_Amount, t.Invoice_Currency, t.Header_Description, CAST(JSON_VALUE(line.value, '$.LineNumber') AS INT), CAST(JSON_VALUE(line.value, '$.LineAmount') AS DECIMAL(18,2)), JSON_VALUE(line.value, '$.LineType'), JSON_VALUE(line.value, '$.Description'), JSON_VALUE(line.value, '$.DistributionCombination'), JSON_VALUE(line.value, '$.ProjectNumber'), JSON_VALUE(line.value, '$.Task'), JSON_VALUE(line.value, '$.ExpenditureType'), JSON_VALUE(line.value, '$.ExpenditureOrganization'), JSON_VALUE(line.value, '$.Award'), t.Metadata_Unique_Identifier FROM dbo.tb_ap_invoices_temp t CROSS APPLY OPENJSON(t.Invoice_Lines_Json) AS line;\n\nTRUNCATE TABLE dbo.tb_ap_invoices_temp; "
+									}
+								],
+								"scriptBlockExecutionTimeout": "02:00:00"
+							}
+						}
+					]
+				}
+			}
+		],
+		"parameters": {
+			"json_file_list": {
+				"type": "array"
+			}
+		},
+		"folder": {
+			"name": "df_camsis_to_fusion_ap_invoices"
+		},
+		"annotations": [],
+		"lastPublishTime": "2026-02-06T16:16:03Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

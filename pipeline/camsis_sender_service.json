@@ -1,0 +1,196 @@
+{
+	"name": "camsis_sender_service",
+	"properties": {
+		"activities": [
+			{
+				"name": "for each status row",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "Camsis Payments Status",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('Camsis Payments Status').output.resultSets[0].rows",
+						"type": "Expression"
+					},
+					"isSequential": true,
+					"activities": [
+						{
+							"name": "Message",
+							"type": "SetVariable",
+							"dependsOn": [],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "message_body",
+								"value": {
+									"value": "@{replace(concat('{\"CorrelationId\": \"', item().SOURCE_REFERENCE, '\",\"SupplierNumber\": ', string(item().SUPPLIER_NUMBER), ',\"InvoiceNumber\": \"', item().INVOICE_NUMBER, '\",\"Status\": \"', if(equals(toUpper(string(item().PAYMENT_STATUS)), 'Y'), 'INVOICE_PAID', 'INVOICE_REJECTED'), '\"}'), '\\\\', '')}",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "Send to Service Bus to mock api post_copy1",
+							"type": "WebActivity",
+							"dependsOn": [
+								{
+									"activity": "Message",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"method": "POST",
+								"relativeUrl": {
+									"value": "@concat('/',variables('queue_name'),'/messages')",
+									"type": "Expression"
+								},
+								"body": {
+									"value": "{\n    \"InvoiceNotifications\" : @{variables('message_body')}\n}",
+									"type": "Expression"
+								}
+							},
+							"linkedServiceName": {
+								"referenceName": "uis_shared_service_bus_linked_service",
+								"type": "LinkedServiceReference"
+							}
+						},
+						{
+							"name": "Mark Processed",
+							"type": "Script",
+							"dependsOn": [
+								{
+									"activity": "Send to Service Bus to mock api post_copy1",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"linkedServiceName": {
+								"referenceName": "uis_df_sql_linked_service",
+								"type": "LinkedServiceReference"
+							},
+							"typeProperties": {
+								"scripts": [
+									{
+										"type": "NonQuery",
+										"text": {
+											"value": "@concat('UPDATE [dbo].[tb_payment_status] SET PROCESSED_BIT = 1 WHERE ID = ',item().ID)",
+											"type": "Expression"
+										}
+									}
+								],
+								"scriptBlockExecutionTimeout": "02:00:00"
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "Camsis Payments Status",
+				"type": "Script",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "Query",
+							"text": "SELECT TOP 1\nID,\nINVOICE_NUMBER, \nSUPPLIER_NUMBER,\nSOURCE_REFERENCE, \nPAYMENT_STATUS\nFROM tb_payment_status\nWHERE PROCESSED_BIT = 0"
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			},
+			{
+				"name": "Send Email",
+				"type": "AzureFunctionActivity",
+				"dependsOn": [
+					{
+						"activity": "for each status row",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"functionName": "sendEmail",
+					"body": {
+						"value": "{\n  \"fromEmail\": \"no-reply@company.com\",\n  \"toEmail\": \"admin@example.com\",\n  \"IntegrationName\": \"Camsis Payment Confirmation\",\n  \"IntegrationStatus\": \"Success\",\n  \"IntegrationMessage\": \"Camsis Payment Confirmation has been sent successfully\"\n}",
+						"type": "Expression"
+					},
+					"method": "POST"
+				},
+				"linkedServiceName": {
+					"referenceName": "uis_shared_process_function",
+					"type": "LinkedServiceReference"
+				}
+			}
+		],
+		"variables": {
+			"json_body": {
+				"type": "Array"
+			},
+			"message_body": {
+				"type": "String"
+			},
+			"queue_name": {
+				"type": "String",
+				"defaultValue": "test-queue"
+			},
+			"id": {
+				"type": "Array"
+			}
+		},
+		"folder": {
+			"name": "df_fusion_to_camsis_payment_confirmation"
+		},
+		"annotations": [],
+		"lastPublishTime": "2026-03-17T16:39:20Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

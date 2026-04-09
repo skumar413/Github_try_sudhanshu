@@ -1,0 +1,665 @@
+{
+	"name": "df_fetch_fusion_lookup_bu_extract",
+	"properties": {
+		"activities": [
+			{
+				"name": "Logging Start",
+				"type": "Script",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "@concat('INSERT INTO [dbo].[tbl_integration_transaction_log] ([pipeline_name],[pipeline_run_id],[activity_name],[activity_type],[step_name],[execution_status],[severity],[source_system],[target_system],[entity_name],[object_name],[business_key],[correlation_id],[file_name],[doc_id],[message],[error_code],[error_message],[start_time_utc],[end_time_utc],[created_by],[created_at_utc],[document_id],[status],[success_flag],[created_at],[updated_at]) VALUES (''', pipeline().Pipeline, ''',''', pipeline().RunId, ''',''Logging Start'',''Script'',''Initialize BU refresh logging'',''InProgress'',''Info'',''Oracle Fusion'',''SQL BU Tables'',''Fusion BU Refresh'',''BU Refresh'',''', pipeline().RunId, ''',''', pipeline().RunId, ''',NULL,NULL,''Fusion BU refresh started.'',NULL,NULL,SYSUTCDATETIME(),SYSUTCDATETIME(),''ADF'',SYSUTCDATETIME(),NULL,''in-progress'',NULL,GETDATE(),GETDATE())')",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			},
+			{
+				"name": "BU Lookup",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Logging Start",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": true
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "ftp_download_bip_report",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"payload": "{\n  \"OperationName\": \"submitESSJobRequest\",\n  \"JobPackageName\": \"/oracle/apps/ess/custom/enterprise_structure/\",\n  \"JobDefName\": \"UOC_SHA_ENTERPRISE_STRUCTURE_EXTRACT\",\n  \"ESSParameters\": \"\"\n}",
+						"targetDirectory": "common/temp/bu/report"
+					}
+				}
+			},
+			{
+				"name": "Log BU Lookup Failure",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "BU Lookup",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "@concat('INSERT INTO [dbo].[tbl_integration_transaction_log] ([pipeline_name],[pipeline_run_id],[activity_name],[activity_type],[step_name],[execution_status],[severity],[source_system],[target_system],[entity_name],[object_name],[business_key],[correlation_id],[file_name],[doc_id],[message],[error_code],[error_message],[start_time_utc],[end_time_utc],[created_by],[created_at_utc],[document_id],[status],[success_flag],[created_at],[updated_at]) VALUES (''', pipeline().Pipeline, ''',''', pipeline().RunId, ''',''Log BU Lookup Failure'',''Script'',''Run BU extract'',''Failed'',''Error'',''Oracle Fusion'',''SQL Lookup Tables'',''Fusion Lookup Refresh'',''BU Lookup'',''business-unit'',''', pipeline().RunId, ''',''common/temp/bu/report'',NULL,''BU lookup failed.'',''BU_LOOKUP_FAILED'',''BU lookup failed.'',SYSUTCDATETIME(),SYSUTCDATETIME(),''ADF'',SYSUTCDATETIME(),NULL,''failed-bu-lookup'',0,GETDATE(),GETDATE())')",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			},
+			{
+				"name": "Fail BU Lookup",
+				"type": "Fail",
+				"dependsOn": [
+					{
+						"activity": "Log BU Lookup Failure",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"message": "BU lookup failed.",
+					"errorCode": "BU_LOOKUP_FAILED"
+				}
+			},
+			{
+				"name": "Set BU file name",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "BU Lookup",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "bu_file_name",
+					"value": {
+						"value": "@concat('bu_extract_', formatDateTime(utcNow(), 'yyyyMMddHHmmss'), '.csv')",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Move BU extract",
+				"type": "Copy",
+				"dependsOn": [
+					{
+						"activity": "Set BU file name",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 1,
+					"retryIntervalInSeconds": 60,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "BinarySource",
+						"storeSettings": {
+							"type": "AzureBlobStorageReadSettings",
+							"recursive": true,
+							"deleteFilesAfterCompletion": true
+						},
+						"formatSettings": {
+							"type": "BinaryReadSettings"
+						}
+					},
+					"sink": {
+						"type": "BinarySink",
+						"storeSettings": {
+							"type": "AzureBlobStorageWriteSettings"
+						}
+					},
+					"enableStaging": false
+				},
+				"inputs": [
+					{
+						"referenceName": "df_common_blob_dataset",
+						"type": "DatasetReference",
+						"parameters": {
+							"folder_name": "temp/bu/report/Report",
+							"file_name": {
+								"value": "@activity('BU Lookup').output.pipelineReturnValue.file_name",
+								"type": "Expression"
+							}
+						}
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "df_common_blob_dataset",
+						"type": "DatasetReference",
+						"parameters": {
+							"folder_name": "bu-master-extract",
+							"file_name": {
+								"value": "@variables('bu_file_name')",
+								"type": "Expression"
+							}
+						}
+					}
+				]
+			},
+			{
+				"name": "Log BU Move Failure",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "Move BU extract",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "@concat('INSERT INTO [dbo].[tbl_integration_transaction_log] ([pipeline_name],[pipeline_run_id],[activity_name],[activity_type],[step_name],[execution_status],[severity],[source_system],[target_system],[entity_name],[object_name],[business_key],[correlation_id],[file_name],[doc_id],[message],[error_code],[error_message],[start_time_utc],[end_time_utc],[created_by],[created_at_utc],[document_id],[status],[success_flag],[created_at],[updated_at]) VALUES (''', pipeline().Pipeline, ''',''', pipeline().RunId, ''',''Log BU Move Failure'',''Script'',''Move BU extract file'',''Failed'',''Error'',''Oracle Fusion'',''SQL Lookup Tables'',''Fusion Lookup Refresh'',''bu-master-extract'',''', activity('BU Lookup').output.pipelineReturnValue.process_id, ''',''', pipeline().RunId, ''',''', variables('bu_file_name'), ''',''', activity('BU Lookup').output.pipelineReturnValue.process_id, ''',''Moving BU extract failed.'',''BU_MOVE_FAILED'',''Moving BU extract failed.'',SYSUTCDATETIME(),SYSUTCDATETIME(),''ADF'',SYSUTCDATETIME(),''', activity('BU Lookup').output.pipelineReturnValue.process_id, ''',''failed-bu-file-move'',0,GETDATE(),GETDATE())')",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			},
+			{
+				"name": "Fail BU Move",
+				"type": "Fail",
+				"dependsOn": [
+					{
+						"activity": "Log BU Move Failure",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"message": "Moving BU extract failed.",
+					"errorCode": "BU_MOVE_FAILED"
+				}
+			},
+			{
+				"name": "Insert BU data into SQL",
+				"type": "Copy",
+				"dependsOn": [
+					{
+						"activity": "Move BU extract",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 1,
+					"retryIntervalInSeconds": 60,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "DelimitedTextSource",
+						"storeSettings": {
+							"type": "AzureBlobStorageReadSettings",
+							"recursive": true,
+							"enablePartitionDiscovery": false
+						},
+						"formatSettings": {
+							"type": "DelimitedTextReadSettings"
+						}
+					},
+					"sink": {
+						"type": "AzureSqlSink",
+						"preCopyScript": "TRUNCATE TABLE [dbo].[tbl_bu_details]",
+						"writeBehavior": "insert",
+						"sqlWriterUseTableLock": false,
+						"disableMetricsCollection": false
+					},
+					"enableStaging": false,
+					"translator": {
+						"type": "TabularTranslator",
+						"mappings": [
+							{
+								"source": {
+									"name": "BUSINESS_UNIT",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "BUSINESS_UNIT_ID",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "BUSINESS_UNIT_NAME",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "BUSINESS_UNIT_NAME",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "BUSINESS_UNIT_CODE",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "BUSINESS_UNIT_CODE",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "BU_START_DATE",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "BU_START_DATE",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "BU_END_DATE",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "BU_END_DATE",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "LEGAL_ENTITY_NAME",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "LEGAL_ENTITY_NAME",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "LEGAL_ENTITY_IDENTIFIER",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "LEGAL_ENTITY_IDENTIFIER",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "LEGAL_ENTITY_ID",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "LEGAL_ENTITY_ID",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "LEDGER_ID",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "LEDGER_ID",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "LEDGER_CATEGORY_CODE",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "LEDGER_CATEGORY_CODE",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "LEDGER_NAME",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "LEDGER_NAME",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "LEDGER_CURRENCY",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "LEDGER_CURRENCY",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "LEDGER_PERIOD_SET_NAME",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "LEDGER_PERIOD_SET_NAME",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "BAL_SEG_COLUMN_NAME",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "BAL_SEG_COLUMN_NAME",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "SEGMENT_TYPE_CODE",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "SEGMENT_TYPE_CODE",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "SEGMENT_VALUE",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "SEGMENT_VALUE",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							}
+						],
+						"typeConversion": true,
+						"typeConversionSettings": {
+							"allowDataTruncation": false,
+							"treatBooleanAsNumber": false
+						}
+					}
+				},
+				"inputs": [
+					{
+						"referenceName": "common_lookup_storage_dataset",
+						"type": "DatasetReference",
+						"parameters": {
+							"folder_name": "bu-master-extract",
+							"file_name": {
+								"value": "@variables('bu_file_name')",
+								"type": "Expression"
+							}
+						}
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "df_payment_status_table",
+						"type": "DatasetReference",
+						"parameters": {
+							"table_name": "tbl_bu_details"
+						}
+					}
+				]
+			},
+			{
+				"name": "Log BU SQL Load Failure",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "Insert BU data into SQL",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "@concat('INSERT INTO [dbo].[tbl_integration_transaction_log] ([pipeline_name],[pipeline_run_id],[activity_name],[activity_type],[step_name],[execution_status],[severity],[source_system],[target_system],[entity_name],[object_name],[business_key],[correlation_id],[file_name],[doc_id],[message],[error_code],[error_message],[start_time_utc],[end_time_utc],[created_by],[created_at_utc],[document_id],[status],[success_flag],[created_at],[updated_at]) VALUES (''', pipeline().Pipeline, ''',''', pipeline().RunId, ''',''Log BU SQL Load Failure'',''Script'',''Load BU extract into SQL'',''Failed'',''Error'',''Oracle Fusion'',''SQL Lookup Tables'',''Fusion Lookup Refresh'',''tbl_bu_details'',''', activity('BU Lookup').output.pipelineReturnValue.process_id, ''',''', pipeline().RunId, ''',''', variables('bu_file_name'), ''',''', activity('BU Lookup').output.pipelineReturnValue.process_id, ''',''Loading BU extract into SQL failed.'',''BU_SQL_LOAD_FAILED'',''Loading BU extract into SQL failed.'',SYSUTCDATETIME(),SYSUTCDATETIME(),''ADF'',SYSUTCDATETIME(),''', activity('BU Lookup').output.pipelineReturnValue.process_id, ''',''failed-bu-sql-load'',0,GETDATE(),GETDATE())')",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			},
+			{
+				"name": "Fail BU SQL Load",
+				"type": "Fail",
+				"dependsOn": [
+					{
+						"activity": "Log BU SQL Load Failure",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"message": "Loading BU extract into SQL failed.",
+					"errorCode": "BU_SQL_LOAD_FAILED"
+				}
+			},
+			{
+				"name": "Update BU BIP Extract Status",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "Insert BU data into SQL",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 1,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "@concat('INSERT INTO [dbo].[tbl_integration_transaction_log] ([pipeline_name],[pipeline_run_id],[activity_name],[activity_type],[step_name],[execution_status],[severity],[source_system],[target_system],[entity_name],[object_name],[business_key],[correlation_id],[file_name],[doc_id],[message],[error_code],[error_message],[start_time_utc],[end_time_utc],[created_by],[created_at_utc],[document_id],[status],[success_flag],[created_at],[updated_at]) VALUES (''', pipeline().Pipeline, ''',''', pipeline().RunId, ''',''Update BU BIP Extract Status'',''Script'',''Complete BU lookup refresh'',''Succeeded'',''Info'',''Oracle Fusion'',''SQL Lookup Tables'',''Fusion Lookup Refresh'',''tbl_bu_details'',''', activity('BU Lookup').output.pipelineReturnValue.process_id, ''',''', pipeline().RunId, ''',''', variables('bu_file_name'), ''',''', activity('BU Lookup').output.pipelineReturnValue.process_id, ''',''BU lookup refresh completed successfully.'',NULL,NULL,SYSUTCDATETIME(),SYSUTCDATETIME(),''ADF'',SYSUTCDATETIME(),''', activity('BU Lookup').output.pipelineReturnValue.process_id, ''',''', activity('BU Lookup').output.pipelineReturnValue.final_status, ''',1,GETDATE(),GETDATE())')",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			},
+			{
+				"name": "Log Pipeline Success",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "Update BU BIP Extract Status",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "@concat('INSERT INTO [dbo].[tbl_integration_transaction_log] ([pipeline_name],[pipeline_run_id],[activity_name],[activity_type],[step_name],[execution_status],[severity],[source_system],[target_system],[entity_name],[object_name],[business_key],[correlation_id],[file_name],[doc_id],[message],[error_code],[error_message],[start_time_utc],[end_time_utc],[created_by],[created_at_utc],[document_id],[status],[success_flag],[created_at],[updated_at]) VALUES (''', pipeline().Pipeline, ''',''', pipeline().RunId, ''',''Log Pipeline Success'',''Script'',''Complete BU refresh pipeline'',''Succeeded'',''Info'',''Oracle Fusion'',''SQL BU Tables'',''Fusion BU Refresh'',''BU Refresh'',''', pipeline().RunId, ''',''', pipeline().RunId, ''',NULL,NULL,''Fusion BU refresh completed successfully.'',NULL,NULL,SYSUTCDATETIME(),SYSUTCDATETIME(),''ADF'',SYSUTCDATETIME(),NULL,''completed'',1,GETDATE(),GETDATE())')",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			}
+		],
+		"variables": {
+			"supllier_master_file_name": {
+				"type": "String"
+			},
+			"bu_file_name": {
+				"type": "String"
+			},
+			"open_accounting_date_file_name": {
+				"type": "String"
+			}
+		},
+		"folder": {
+			"name": "df_fetch_fusion_lookup_tables"
+		},
+		"annotations": [],
+		"lastPublishTime": "2026-03-27T15:55:49Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

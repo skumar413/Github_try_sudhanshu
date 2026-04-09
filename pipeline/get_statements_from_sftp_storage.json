@@ -1,0 +1,331 @@
+{
+	"name": "get_statements_from_sftp_storage",
+	"properties": {
+		"activities": [
+			{
+				"name": "List Files",
+				"type": "GetMetadata",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"dataset": {
+						"referenceName": "df_barclays_statement_inbound_sftp_dataset",
+						"type": "DatasetReference"
+					},
+					"fieldList": [
+						"childItems",
+						"exists"
+					],
+					"storeSettings": {
+						"type": "AzureBlobStorageReadSettings",
+						"recursive": true,
+						"enablePartitionDiscovery": false
+					},
+					"formatSettings": {
+						"type": "BinaryReadSettings"
+					}
+				}
+			},
+			{
+				"name": "Check Files",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "List Files",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@and(activity('List Files').output.exists,greater(length(activity('List Files').output.childItems),0))",
+						"type": "Expression"
+					},
+					"ifFalseActivities": [
+						{
+							"name": "No File Log",
+							"type": "SqlServerStoredProcedure",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"storedProcedureName": "[dbo].[sp_upsert_tb_file_logs]",
+								"storedProcedureParameters": {
+									"inbound_file_name": {
+										"value": null,
+										"type": "String"
+									},
+									"pipeline_id": {
+										"value": {
+											"value": "@pipeline().RunId",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"processed_file_name": {
+										"value": null,
+										"type": "String"
+									},
+									"status_message": {
+										"value": "No statements to process",
+										"type": "String"
+									}
+								}
+							},
+							"linkedServiceName": {
+								"referenceName": "uis_df_sql_linked_service",
+								"type": "LinkedServiceReference"
+							}
+						},
+						{
+							"name": "Notification Placeholder",
+							"type": "Wait",
+							"dependsOn": [
+								{
+									"activity": "No File Log",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"waitTimeInSeconds": 1
+							}
+						}
+					],
+					"ifTrueActivities": [
+						{
+							"name": "Move to Az",
+							"type": "Copy",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "BinarySource",
+									"storeSettings": {
+										"type": "AzureBlobStorageReadSettings",
+										"recursive": true,
+										"deleteFilesAfterCompletion": false
+									},
+									"formatSettings": {
+										"type": "BinaryReadSettings"
+									}
+								},
+								"sink": {
+									"type": "BinarySink",
+									"storeSettings": {
+										"type": "AzureBlobStorageWriteSettings"
+									}
+								},
+								"enableStaging": false
+							},
+							"inputs": [
+								{
+									"referenceName": "df_barclays_statement_inbound_sftp_dataset",
+									"type": "DatasetReference"
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "df_barclays_statement_inbound_storage_container_dataset",
+									"type": "DatasetReference",
+									"parameters": {
+										"file_path": "inbound/raw"
+									}
+								}
+							]
+						},
+						{
+							"name": "decrypt_and_zip",
+							"type": "ExecutePipeline",
+							"dependsOn": [
+								{
+									"activity": "Move to Az",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "decrypt_and_zip_each_statement",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"statements_list": {
+										"value": "@activity('List Files').output.childItems",
+										"type": "Expression"
+									},
+									"pipeline_id": {
+										"value": "@pipeline().RunId",
+										"type": "Expression"
+									}
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "Catch Error",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "List Files",
+						"dependencyConditions": [
+							"Completed"
+						]
+					},
+					{
+						"activity": "Check Files",
+						"dependencyConditions": [
+							"Skipped",
+							"Completed"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "ErrorMsg",
+					"value": {
+						"value": "@concat(activity('List Files').output?.message,'',activity('Move to Az').output.error?.message,'',activity('decrypt_and_zip').output.error?.message)",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Error Notification Service",
+				"type": "Wait",
+				"dependsOn": [
+					{
+						"activity": "Integration Error Log",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"waitTimeInSeconds": 1
+				}
+			},
+			{
+				"name": "Notification Placeholder for connection error",
+				"type": "Wait",
+				"dependsOn": [
+					{
+						"activity": "List Files",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"waitTimeInSeconds": 1
+				}
+			},
+			{
+				"name": "Integration Error Log",
+				"type": "SqlServerStoredProcedure",
+				"dependsOn": [
+					{
+						"activity": "Catch Error",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"storedProcedureName": "[dbo].[sp_upsert_tb_file_logs]",
+					"storedProcedureParameters": {
+						"inbound_file_name": {
+							"value": null,
+							"type": "String"
+						},
+						"pipeline_id": {
+							"value": {
+								"value": "@pipeline().RunId",
+								"type": "Expression"
+							},
+							"type": "String"
+						},
+						"processed_file_name": {
+							"value": null,
+							"type": "String"
+						},
+						"status_message": {
+							"value": {
+								"value": "@concat('Integration Pipeline Error: ',variables('ErrorMsg'))",
+								"type": "Expression"
+							},
+							"type": "String"
+						}
+					}
+				},
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				}
+			}
+		],
+		"variables": {
+			"ErrorMsg": {
+				"type": "String",
+				"defaultValue": " "
+			},
+			"inbound_file_name": {
+				"type": "String"
+			},
+			"processed_file_name": {
+				"type": "String"
+			}
+		},
+		"folder": {
+			"name": "df_barclays_to_fusion_bank_statements"
+		},
+		"annotations": [],
+		"lastPublishTime": "2026-02-02T10:25:04Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

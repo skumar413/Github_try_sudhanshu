@@ -1,0 +1,224 @@
+{
+	"name": "uis_df_generic_ar_invoices_storage_container_dataset",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "uis_df_storage_linked_service",
+			"type": "LinkedServiceReference"
+		},
+		"parameters": {
+			"file_name": {
+				"type": "string"
+			}
+		},
+		"folder": {
+			"name": "uis_df_generic_ar_invoices"
+		},
+		"annotations": [],
+		"type": "DelimitedText",
+		"typeProperties": {
+			"location": {
+				"type": "AzureBlobStorageLocation",
+				"fileName": {
+					"value": "@dataset().file_name",
+					"type": "Expression"
+				},
+				"container": "generic-ar-invoice-to-fusion"
+			},
+			"columnDelimiter": ",",
+			"escapeChar": "\\",
+			"firstRowAsHeader": true,
+			"quoteChar": "\""
+		},
+		"schema": [
+			{
+				"name": "INTERFACE_NAME",
+				"type": "String"
+			},
+			{
+				"name": "INTERFACE_LINE_CONTEXT",
+				"type": "String"
+			},
+			{
+				"name": "INTERFACE_LINE_ATTRIBUTE1",
+				"type": "String"
+			},
+			{
+				"name": "INTERFACE_LINE_ATTRIBUTE2",
+				"type": "String"
+			},
+			{
+				"name": "INTERFACE_LINE_ATTRIBUTE3",
+				"type": "String"
+			},
+			{
+				"name": "INTERFACE_LINE_ATTRIBUTE4",
+				"type": "String"
+			},
+			{
+				"name": "INTERFACE_LINE_ATTRIBUTE5",
+				"type": "String"
+			},
+			{
+				"name": "INTERFACE_LINE_ATTRIBUTE6",
+				"type": "String"
+			},
+			{
+				"name": "INTERFACE_LINE_ATTRIBUTE7",
+				"type": "String"
+			},
+			{
+				"name": "BATCH_SOURCE_NAME",
+				"type": "String"
+			},
+			{
+				"name": "LINE_TYPE",
+				"type": "String"
+			},
+			{
+				"name": "DESCRIPTION",
+				"type": "String"
+			},
+			{
+				"name": "CURRENCY_CODE",
+				"type": "String"
+			},
+			{
+				"name": "AMOUNT",
+				"type": "String"
+			},
+			{
+				"name": "CUST_TRX_TYPE_NAME",
+				"type": "String"
+			},
+			{
+				"name": "TERM_NAME",
+				"type": "String"
+			},
+			{
+				"name": "LINK_TO_LINE_CONTEXT",
+				"type": "String"
+			},
+			{
+				"name": "LINK_TO_LINE_ATTRIBUTE1",
+				"type": "String"
+			},
+			{
+				"name": "LINK_TO_LINE_ATTRIBUTE2",
+				"type": "String"
+			},
+			{
+				"name": "LINK_TO_LINE_ATTRIBUTE3",
+				"type": "String"
+			},
+			{
+				"name": "LINK_TO_LINE_ATTRIBUTE4",
+				"type": "String"
+			},
+			{
+				"name": "LINK_TO_LINE_ATTRIBUTE5",
+				"type": "String"
+			},
+			{
+				"name": "LINK_TO_LINE_ATTRIBUTE6",
+				"type": "String"
+			},
+			{
+				"name": "LINK_TO_LINE_ATTRIBUTE7",
+				"type": "String"
+			},
+			{
+				"name": "TRX_DATE",
+				"type": "String"
+			},
+			{
+				"name": "GL_DATE",
+				"type": "String"
+			},
+			{
+				"name": "QUANTITY",
+				"type": "String"
+			},
+			{
+				"name": "UNIT_SELLING_PRICE",
+				"type": "String"
+			},
+			{
+				"name": "TAX_CODE",
+				"type": "String"
+			},
+			{
+				"name": "ATTRIBUTE13",
+				"type": "String"
+			},
+			{
+				"name": "ATTRIBUTE15",
+				"type": "String"
+			},
+			{
+				"name": "HEADER_ATTRIBUTE_CATEGORY",
+				"type": "String"
+			},
+			{
+				"name": "HEADER_ATTRIBUTE1",
+				"type": "String"
+			},
+			{
+				"name": "HEADER_ATTRIBUTE2",
+				"type": "String"
+			},
+			{
+				"name": "UOM_NAME",
+				"type": "String"
+			},
+			{
+				"name": "ACCOUNT_CLASS",
+				"type": "String"
+			},
+			{
+				"name": "SEGMENT1",
+				"type": "String"
+			},
+			{
+				"name": "SEGMENT2",
+				"type": "String"
+			},
+			{
+				"name": "SEGMENT3",
+				"type": "String"
+			},
+			{
+				"name": "SEGMENT4",
+				"type": "String"
+			},
+			{
+				"name": "SEGMENT5",
+				"type": "String"
+			},
+			{
+				"name": "SEGMENT6",
+				"type": "String"
+			},
+			{
+				"name": "PARTY_NAME",
+				"type": "String"
+			},
+			{
+				"name": "LOCATION",
+				"type": "String"
+			},
+			{
+				"name": "PRIMARY_SALESREP_NUMBER",
+				"type": "String"
+			},
+			{
+				"name": "PURCHASE_ORDER",
+				"type": "String"
+			},
+			{
+				"name": "SALES_ORDER",
+				"type": "String"
+			}
+		]
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}

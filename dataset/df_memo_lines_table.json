@@ -1,0 +1,81 @@
+{
+	"name": "df_memo_lines_table",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "uis_df_sql_linked_service",
+			"type": "LinkedServiceReference"
+		},
+		"parameters": {
+			"table_name": {
+				"type": "string"
+			}
+		},
+		"folder": {
+			"name": "df_fusion_memo_lines_datasets"
+		},
+		"annotations": [],
+		"type": "AzureSqlTable",
+		"schema": [
+			{
+				"name": "Description",
+				"type": "nvarchar"
+			},
+			{
+				"name": "MemoLineId",
+				"type": "nvarchar"
+			},
+			{
+				"name": "FromDate",
+				"type": "datetime",
+				"precision": 23,
+				"scale": 3
+			},
+			{
+				"name": "ToDate",
+				"type": "datetime",
+				"precision": 23,
+				"scale": 3
+			},
+			{
+				"name": "Type",
+				"type": "nvarchar"
+			},
+			{
+				"name": "TaxClassification",
+				"type": "nvarchar"
+			},
+			{
+				"name": "TaxProductCategory",
+				"type": "nvarchar"
+			},
+			{
+				"name": "BusinessUnitName",
+				"type": "nvarchar"
+			},
+			{
+				"name": "RevenueAccount",
+				"type": "nvarchar"
+			},
+			{
+				"name": "CreationDate",
+				"type": "datetime",
+				"precision": 23,
+				"scale": 3
+			},
+			{
+				"name": "LastUpdateDate",
+				"type": "datetime",
+				"precision": 23,
+				"scale": 3
+			}
+		],
+		"typeProperties": {
+			"schema": "dbo",
+			"table": {
+				"value": "@dataset().table_name",
+				"type": "Expression"
+			}
+		}
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}

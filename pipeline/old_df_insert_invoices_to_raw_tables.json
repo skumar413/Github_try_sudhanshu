@@ -1,0 +1,618 @@
+{
+	"name": "old_df_insert_invoices_to_raw_tables",
+	"properties": {
+		"activities": [
+			{
+				"name": "ForEach1",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "TRUNCATE RAW TABLES",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('Get XML Invoices').output.childItems",
+						"type": "Expression"
+					},
+					"isSequential": true,
+					"activities": [
+						{
+							"name": "Flatten XML to Header and Lines",
+							"type": "ExecuteDataFlow",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"dataflow": {
+									"referenceName": "df_flatten_xml_invoice_to_sql_dataflow",
+									"type": "DataFlowReference",
+									"datasetParameters": {
+										"xml": {
+											"folder_name": "inbound",
+											"file_name": {
+												"value": "@item().name",
+												"type": "Expression"
+											}
+										},
+										"xml1": {
+											"folder_name": "inbound",
+											"file_name": "@item().name"
+										},
+										"tbInvoiceLines": {
+											"table_name": "tb_softco_ap_invoice_lines_raw"
+										},
+										"tbInvoiceHeader": {
+											"table_name": "tb_softco_ap_invoice_header_raw"
+										}
+									}
+								},
+								"compute": {
+									"coreCount": 16,
+									"computeType": "General"
+								},
+								"traceLevel": "Fine"
+							}
+						},
+						{
+							"name": "Archive XML Invoices",
+							"type": "Copy",
+							"state": "Inactive",
+							"onInactiveMarkAs": "Succeeded",
+							"dependsOn": [
+								{
+									"activity": "Flatten XML to Header and Lines",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "BinarySource",
+									"storeSettings": {
+										"type": "AzureBlobStorageReadSettings",
+										"recursive": true,
+										"deleteFilesAfterCompletion": true
+									},
+									"formatSettings": {
+										"type": "BinaryReadSettings"
+									}
+								},
+								"sink": {
+									"type": "BinarySink",
+									"storeSettings": {
+										"type": "AzureBlobStorageWriteSettings"
+									}
+								},
+								"enableStaging": false
+							},
+							"inputs": [
+								{
+									"referenceName": "df_softco_blob_dataset",
+									"type": "DatasetReference",
+									"parameters": {
+										"folder_name": "inbound",
+										"file_name": {
+											"value": "@item().name",
+											"type": "Expression"
+										}
+									}
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "df_softco_blob_dataset",
+									"type": "DatasetReference",
+									"parameters": {
+										"folder_name": {
+											"value": "@concat('archive/',formatDateTime(utcNow(), 'yyyy-MM-dd'), '/', pipeline().RunId)",
+											"type": "Expression"
+										},
+										"file_name": {
+											"value": "@item().name",
+											"type": "Expression"
+										}
+									}
+								}
+							]
+						},
+						{
+							"name": "Move to Interface Staging FBDI",
+							"type": "Copy",
+							"state": "Inactive",
+							"onInactiveMarkAs": "Succeeded",
+							"dependsOn": [
+								{
+									"activity": "Archive XML Invoices",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "AzureSqlSource",
+									"sqlReaderQuery": "SELECT * FROM [dbo].[vw_softco_ap_invoice_header_transformed]\nWHERE validation_status = 'Validation Success' ",
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"sink": {
+									"type": "AzureSqlSink",
+									"writeBehavior": "insert",
+									"sqlWriterUseTableLock": false
+								},
+								"enableStaging": false,
+								"translator": {
+									"type": "TabularTranslator",
+									"mappings": [
+										{
+											"source": {
+												"name": "bu_name",
+												"type": "String",
+												"physicalType": "nvarchar"
+											},
+											"sink": {
+												"name": "Business Unit",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "source",
+												"type": "String",
+												"physicalType": "varchar"
+											},
+											"sink": {
+												"name": "Source",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "invoice_number",
+												"type": "String",
+												"physicalType": "nvarchar"
+											},
+											"sink": {
+												"name": "Invoice Number",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "invoice_amount",
+												"type": "Decimal",
+												"physicalType": "decimal",
+												"scale": 2,
+												"precision": 18
+											},
+											"sink": {
+												"name": "Invoice Amount",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "invoice_date",
+												"type": "Date",
+												"physicalType": "date"
+											},
+											"sink": {
+												"name": "Invoice Date",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "supplier_name",
+												"type": "String",
+												"physicalType": "nvarchar"
+											},
+											"sink": {
+												"name": "Supplier Name",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "supplier_number",
+												"type": "String",
+												"physicalType": "nvarchar"
+											},
+											"sink": {
+												"name": "Supplier Number",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "supplier_site_code",
+												"type": "String",
+												"physicalType": "nvarchar"
+											},
+											"sink": {
+												"name": "Supplier Site",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "invoice_type",
+												"type": "String",
+												"physicalType": "nvarchar"
+											},
+											"sink": {
+												"name": "Invoice Type",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "payment_term",
+												"type": "String",
+												"physicalType": "nvarchar"
+											},
+											"sink": {
+												"name": "Payment Terms",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "description",
+												"type": "String",
+												"physicalType": "nvarchar"
+											},
+											"sink": {
+												"name": "Description",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "validation_status",
+												"type": "String",
+												"physicalType": "varchar"
+											},
+											"sink": {
+												"name": "ValidationStatus",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "validation_reason",
+												"type": "String",
+												"physicalType": "varchar"
+											},
+											"sink": {
+												"name": "validation_reason",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "source_transaction_reference",
+												"type": "String",
+												"physicalType": "nvarchar"
+											},
+											"sink": {
+												"name": "Attribute 2",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "accounting_date",
+												"type": "Date",
+												"physicalType": "date"
+											},
+											"sink": {
+												"name": "Accounting Date",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										}
+									],
+									"typeConversion": true,
+									"typeConversionSettings": {
+										"allowDataTruncation": true,
+										"treatBooleanAsNumber": false,
+										"dateFormat": "yyyy/MM/dd"
+									}
+								}
+							},
+							"inputs": [
+								{
+									"referenceName": "df_softco_ap_table_dataset",
+									"type": "DatasetReference",
+									"parameters": {
+										"table_name": "*"
+									}
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "df_softco_ap_table_dataset",
+									"type": "DatasetReference",
+									"parameters": {
+										"table_name": "tb_generic_ap_invoice_header_staging"
+									}
+								}
+							]
+						},
+						{
+							"name": "Move to Line staging FBDI",
+							"type": "Copy",
+							"state": "Inactive",
+							"onInactiveMarkAs": "Succeeded",
+							"dependsOn": [
+								{
+									"activity": "Move to Interface Staging FBDI",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "AzureSqlSource",
+									"sqlReaderQuery": "SELECT\n    l.*,\n    h.[Invoice ID] AS [Invoice ID]\nFROM [dbo].[vw_softco_ap_invoice_line_transformed] l\nINNER JOIN [dbo].[tb_generic_ap_invoice_header_staging] h\n    ON l.invoice_number = h.[Invoice Number]\nWHERE l.validation_status = 'Validation Success'\n  AND h.ValidationStatus = 'Validation Success';",
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"sink": {
+									"type": "AzureSqlSink",
+									"writeBehavior": "insert",
+									"sqlWriterUseTableLock": false
+								},
+								"enableStaging": false,
+								"translator": {
+									"type": "TabularTranslator",
+									"mappings": [
+										{
+											"source": {
+												"name": "Invoice ID"
+											},
+											"sink": {
+												"name": "Invoice ID",
+												"type": "Int32",
+												"physicalType": "int"
+											}
+										},
+										{
+											"source": {
+												"name": "line_number",
+												"type": "String",
+												"physicalType": "nvarchar"
+											},
+											"sink": {
+												"name": "Line Number",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "line_type",
+												"type": "String",
+												"physicalType": "varchar"
+											},
+											"sink": {
+												"name": "Line Type",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "line_amount",
+												"type": "Decimal",
+												"physicalType": "decimal",
+												"scale": 2,
+												"precision": 18
+											},
+											"sink": {
+												"name": "Amount",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "validation_reason",
+												"type": "String",
+												"physicalType": "varchar"
+											},
+											"sink": {
+												"name": "validation_reason",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "validation_status",
+												"type": "String",
+												"physicalType": "varchar"
+											},
+											"sink": {
+												"name": "ValidationStatus",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "distribution_combination"
+											},
+											"sink": {
+												"name": "Distribution Combination",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "line_description",
+												"type": "String",
+												"physicalType": "nvarchar"
+											},
+											"sink": {
+												"name": "Description",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										}
+									],
+									"typeConversion": true,
+									"typeConversionSettings": {
+										"allowDataTruncation": true,
+										"treatBooleanAsNumber": false
+									}
+								}
+							},
+							"inputs": [
+								{
+									"referenceName": "df_softco_ap_table_dataset",
+									"type": "DatasetReference",
+									"parameters": {
+										"table_name": "*"
+									}
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "df_softco_ap_table_dataset",
+									"type": "DatasetReference",
+									"parameters": {
+										"table_name": "tb_generic_ap_invoice_lines_staging"
+									}
+								}
+							]
+						}
+					]
+				}
+			},
+			{
+				"name": "Get XML Invoices",
+				"type": "GetMetadata",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"dataset": {
+						"referenceName": "df_softco_ap_invoice_xml_dataset",
+						"type": "DatasetReference",
+						"parameters": {
+							"folder_name": "inbound",
+							"file_name": "*.xml"
+						}
+					},
+					"fieldList": [
+						"childItems"
+					],
+					"storeSettings": {
+						"type": "AzureBlobStorageReadSettings",
+						"recursive": true,
+						"enablePartitionDiscovery": false
+					}
+				}
+			},
+			{
+				"name": "TRUNCATE RAW TABLES",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "Get XML Invoices",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "Query",
+							"text": "TRUNCATE TABLE [dbo].[tb_softco_ap_invoice_lines_raw];\nTRUNCATE TABLE [dbo].[tb_softco_ap_invoice_header_raw];"
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			}
+		],
+		"folder": {
+			"name": "df_softco_to_fusion_ap_invoice"
+		},
+		"annotations": [],
+		"lastPublishTime": "2026-03-27T11:30:24Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

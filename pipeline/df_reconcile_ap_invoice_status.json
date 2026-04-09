@@ -1,0 +1,51 @@
+{
+	"name": "df_reconcile_ap_invoice_status",
+	"properties": {
+		"activities": [
+			{
+				"name": "Register Reconciliation Run",
+				"type": "Script",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.01:00:00",
+					"retry": 1,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "@concat('UPDATE [dbo].[tbl_integration_delivery_group] SET [reconciliation_status] = ''Pending'', [reconciliation_report_name] = ''', pipeline().parameters.p_bip_report_name, ''', [updated_at_utc] = SYSUTCDATETIME() WHERE [batch_id] = TRY_CONVERT(uniqueidentifier, ''', pipeline().parameters.p_batch_id, '''); UPDATE [dbo].[tbl_integration_document_status] SET [reconciliation_status] = ''Pending'', [last_updated_at_utc] = SYSUTCDATETIME() WHERE [batch_id] = TRY_CONVERT(uniqueidentifier, ''', pipeline().parameters.p_batch_id, ''') AND [document_status] IN (''Delivered To Interface'', ''Imported To AP'');')",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "00:30:00"
+				}
+			}
+		],
+		"parameters": {
+			"p_batch_id": {
+				"type": "String"
+			},
+			"p_bip_report_name": {
+				"type": "String",
+				"defaultValue": "AP Invoice Reconciliation BIP"
+			}
+		},
+		"folder": {
+			"name": "df_softco_to_fusion_ap_invoice_inbound_integration (IN-04)/stage 2 - to be triggered every X hours"
+		},
+		"annotations": [],
+		"lastPublishTime": "2026-03-27T18:37:41Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

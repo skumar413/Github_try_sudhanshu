@@ -1,0 +1,207 @@
+{
+	"name": "decrypt_and_zip_each_statement",
+	"properties": {
+		"activities": [
+			{
+				"name": "zip_each",
+				"type": "ForEach",
+				"dependsOn": [],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@pipeline().parameters.statements_list",
+						"type": "Expression"
+					},
+					"isSequential": true,
+					"activities": [
+						{
+							"name": "file logging",
+							"type": "SqlServerStoredProcedure",
+							"dependsOn": [
+								{
+									"activity": "zip",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"storedProcedureName": "[dbo].[sp_upsert_tb_file_logs]",
+								"storedProcedureParameters": {
+									"inbound_file_name": {
+										"value": {
+											"value": "@item().name",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"pipeline_id": {
+										"value": {
+											"value": "@pipeline().parameters.pipeline_id",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"processed_file_name": {
+										"value": {
+											"value": "@{if(contains(item().name, '.'), concat(substring(item().name, 0, lastIndexOf(item().name, '.')), '_', formatDateTime(utcNow(), 'yyyyMMddHHmmss'), '.zip'), concat(item().name, '_', formatDateTime(utcNow(), 'yyyyMMddHHmmss'), '.zip'))}",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"status_message": {
+										"value": "Zipped Successfully",
+										"type": "String"
+									}
+								}
+							},
+							"linkedServiceName": {
+								"referenceName": "uis_df_sql_linked_service",
+								"type": "LinkedServiceReference"
+							}
+						},
+						{
+							"name": "Error Logging",
+							"type": "SqlServerStoredProcedure",
+							"dependsOn": [
+								{
+									"activity": "zip",
+									"dependencyConditions": [
+										"Failed"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"storedProcedureName": "[dbo].[sp_upsert_tb_file_logs]",
+								"storedProcedureParameters": {
+									"inbound_file_name": {
+										"value": {
+											"value": "@item().name",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"pipeline_id": {
+										"value": {
+											"value": "@pipeline().parameters.pipeline_id",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"processed_file_name": {
+										"value": null,
+										"type": "String"
+									},
+									"status_message": {
+										"value": {
+											"value": "@concat('Zip Failed For File: ',item().name)",
+											"type": "Expression"
+										},
+										"type": "String"
+									}
+								}
+							},
+							"linkedServiceName": {
+								"referenceName": "uis_df_sql_linked_service",
+								"type": "LinkedServiceReference"
+							}
+						},
+						{
+							"name": "Decryp TBD",
+							"type": "AzureFunctionActivity",
+							"state": "Inactive",
+							"onInactiveMarkAs": "Succeeded",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"functionName": "decrypt",
+								"method": "POST"
+							},
+							"linkedServiceName": {
+								"referenceName": "uis_shared_process_function",
+								"type": "LinkedServiceReference"
+							}
+						},
+						{
+							"name": "zip",
+							"type": "AzureFunctionActivity",
+							"dependsOn": [
+								{
+									"activity": "Decryp TBD",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"functionName": "zip",
+								"body": {
+									"value": "{\n\"source_paths\": [\"@{concat('barclays/inbound/raw/', item().name)}\"],\n  \"target_path\": \"@{concat('barclays/inbound/zip/', if(contains(item().name, '.'), concat(substring(item().name, 0, lastIndexOf(item().name, '.')), '_', formatDateTime(utcNow(), 'yyyyMMddHHmmss'), '.zip'), concat(item().name, '_', formatDateTime(utcNow(), 'yyyyMMddHHmmss'), '.zip')))}\"\n}",
+									"type": "Expression"
+								},
+								"method": "POST"
+							},
+							"linkedServiceName": {
+								"referenceName": "uis_shared_process_function",
+								"type": "LinkedServiceReference"
+							}
+						}
+					]
+				}
+			}
+		],
+		"parameters": {
+			"statements_list": {
+				"type": "array"
+			},
+			"pipeline_id": {
+				"type": "string"
+			}
+		},
+		"variables": {
+			"inbound_file_name": {
+				"type": "String"
+			},
+			"processed_file_name": {
+				"type": "String"
+			}
+		},
+		"folder": {
+			"name": "df_barclays_to_fusion_bank_statements"
+		},
+		"annotations": [],
+		"lastPublishTime": "2026-02-05T18:12:54Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

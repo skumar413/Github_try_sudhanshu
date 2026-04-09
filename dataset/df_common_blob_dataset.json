@@ -1,0 +1,37 @@
+{
+	"name": "df_common_blob_dataset",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "uis_df_storage_linked_service",
+			"type": "LinkedServiceReference"
+		},
+		"parameters": {
+			"folder_name": {
+				"type": "string"
+			},
+			"file_name": {
+				"type": "string"
+			}
+		},
+		"folder": {
+			"name": "df_ftp_ais_common_datasets"
+		},
+		"annotations": [],
+		"type": "Binary",
+		"typeProperties": {
+			"location": {
+				"type": "AzureBlobStorageLocation",
+				"fileName": {
+					"value": "@dataset().file_name",
+					"type": "Expression"
+				},
+				"folderPath": {
+					"value": "@dataset().folder_name",
+					"type": "Expression"
+				},
+				"container": "blob-container-common"
+			}
+		}
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}

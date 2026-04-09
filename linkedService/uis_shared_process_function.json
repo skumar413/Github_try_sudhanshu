@@ -1,0 +1,20 @@
+{
+	"name": "uis_shared_process_function",
+	"type": "Microsoft.DataFactory/factories/linkedservices",
+	"properties": {
+		"annotations": [],
+		"type": "AzureFunction",
+		"typeProperties": {
+			"functionAppUrl": "https://uis-rg-integration-function-poc-uks-001.azurewebsites.net",
+			"authentication": "Anonymous",
+			"functionKey": {
+				"type": "AzureKeyVaultSecret",
+				"store": {
+					"referenceName": "usi_df_kv_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"secretName": "function-app-key"
+			}
+		}
+	}
+}

@@ -1,0 +1,554 @@
+{
+	"name": "df_combined_payment_confirmation_import",
+	"properties": {
+		"activities": [
+			{
+				"name": "Call BIP Report",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Set Start Date",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Set End Date",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "ftp_download_bip_report",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"payload": {
+							"value": "{\n  \"OperationName\": \"submitESSJobRequest\",\n  \"JobPackageName\": \"/oracle/apps/ess/custom/oracle/apps/ess/custom/UoCPaymentStatus\",\n  \"JobDefName\": \"UoCPaymentStatus\",\n  \"ESSParameters\": \"@{concat(variables('start_date'),',',variables('end_date'))}\"\n}",
+							"type": "Expression"
+						},
+						"targetDirectory": "fusion-to-camsis/temp/report"
+					}
+				}
+			},
+			{
+				"name": "Insert Into Table",
+				"type": "Copy",
+				"dependsOn": [
+					{
+						"activity": "Move Report",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "DelimitedTextSource",
+						"storeSettings": {
+							"type": "AzureBlobStorageReadSettings",
+							"recursive": true,
+							"enablePartitionDiscovery": false
+						},
+						"formatSettings": {
+							"type": "DelimitedTextReadSettings"
+						}
+					},
+					"sink": {
+						"type": "AzureSqlSink",
+						"writeBehavior": "insert",
+						"sqlWriterUseTableLock": false,
+						"disableMetricsCollection": false
+					},
+					"enableStaging": false,
+					"translator": {
+						"type": "TabularTranslator",
+						"mappings": [
+							{
+								"source": {
+									"name": "SOURCE",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "SOURCE",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "CORRELATION_ID",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "SOURCE_REFERENCE",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "INVOICE_NUMBER",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "INVOICE_NUMBER",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "SUPPLIER_NUMBER",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "SUPPLIER_NUMBER",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "PAYMENT_STATUS",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "PAYMENT_STATUS",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "PAYMENT_DATE",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "PAYMENT_DATE",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "PAYMENT_NUMBER"
+								},
+								"sink": {
+									"name": "PAYMENT_NUMBER"
+								}
+							},
+							{
+								"source": {
+									"name": "PAYMENT_METHOD"
+								},
+								"sink": {
+									"name": "PAYMENT_METHOD"
+								}
+							},
+							{
+								"source": {
+									"name": "PAYMENT_AMOUNT"
+								},
+								"sink": {
+									"name": "PAYMENT_AMOUNT"
+								}
+							},
+							{
+								"source": {
+									"name": "CURRENCY"
+								},
+								"sink": {
+									"name": "CURRENCY"
+								}
+							}
+						],
+						"typeConversion": true,
+						"typeConversionSettings": {
+							"allowDataTruncation": false,
+							"treatBooleanAsNumber": false
+						}
+					}
+				},
+				"inputs": [
+					{
+						"referenceName": "df_camsis_bip_storage",
+						"type": "DatasetReference",
+						"parameters": {
+							"folder_name": "paid-invoices",
+							"file_name": {
+								"value": "@variables('report_file_name')",
+								"type": "Expression"
+							}
+						}
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "df_payment_status_table",
+						"type": "DatasetReference",
+						"parameters": {
+							"table_name": "tb_payment_status"
+						}
+					}
+				]
+			},
+			{
+				"name": "Set Start Date",
+				"type": "SetVariable",
+				"dependsOn": [],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "start_date",
+					"value": "01-01-2025"
+				}
+			},
+			{
+				"name": "Set End Date",
+				"type": "SetVariable",
+				"dependsOn": [],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "end_date",
+					"value": "31-01-2026"
+				}
+			},
+			{
+				"name": "Delete Temp",
+				"type": "Delete",
+				"dependsOn": [
+					{
+						"activity": "Move Report",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"dataset": {
+						"referenceName": "df_camsis_bip_storage",
+						"type": "DatasetReference",
+						"parameters": {
+							"folder_name": "temp/report",
+							"file_name": "*"
+						}
+					},
+					"enableLogging": false,
+					"storeSettings": {
+						"type": "AzureBlobStorageReadSettings",
+						"recursive": true,
+						"wildcardFileName": "*",
+						"enablePartitionDiscovery": false
+					}
+				}
+			},
+			{
+				"name": "Move Report",
+				"type": "Copy",
+				"dependsOn": [
+					{
+						"activity": "Set Report File name",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "DelimitedTextSource",
+						"storeSettings": {
+							"type": "AzureBlobStorageReadSettings",
+							"recursive": true,
+							"enablePartitionDiscovery": false
+						},
+						"formatSettings": {
+							"type": "DelimitedTextReadSettings"
+						}
+					},
+					"sink": {
+						"type": "DelimitedTextSink",
+						"storeSettings": {
+							"type": "AzureBlobStorageWriteSettings"
+						},
+						"formatSettings": {
+							"type": "DelimitedTextWriteSettings",
+							"quoteAllText": true,
+							"fileExtension": ".txt"
+						}
+					},
+					"enableStaging": false,
+					"translator": {
+						"type": "TabularTranslator",
+						"typeConversion": true,
+						"typeConversionSettings": {
+							"allowDataTruncation": true,
+							"treatBooleanAsNumber": false
+						}
+					}
+				},
+				"inputs": [
+					{
+						"referenceName": "df_camsis_bip_storage",
+						"type": "DatasetReference",
+						"parameters": {
+							"folder_name": "temp/report/Report",
+							"file_name": {
+								"value": "@activity('Call BIP Report').output.pipelineReturnValue.file_name",
+								"type": "Expression"
+							}
+						}
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "df_camsis_bip_storage",
+						"type": "DatasetReference",
+						"parameters": {
+							"folder_name": "paid-invoices",
+							"file_name": {
+								"value": "@variables('report_file_name')",
+								"type": "Expression"
+							}
+						}
+					}
+				]
+			},
+			{
+				"name": "Archive",
+				"type": "Copy",
+				"dependsOn": [
+					{
+						"activity": "Insert Into Table",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "DelimitedTextSource",
+						"storeSettings": {
+							"type": "AzureBlobStorageReadSettings",
+							"recursive": true,
+							"enablePartitionDiscovery": false
+						},
+						"formatSettings": {
+							"type": "DelimitedTextReadSettings"
+						}
+					},
+					"sink": {
+						"type": "DelimitedTextSink",
+						"storeSettings": {
+							"type": "AzureBlobStorageWriteSettings"
+						},
+						"formatSettings": {
+							"type": "DelimitedTextWriteSettings",
+							"quoteAllText": true,
+							"fileExtension": ".txt"
+						}
+					},
+					"enableStaging": false,
+					"translator": {
+						"type": "TabularTranslator",
+						"typeConversion": true,
+						"typeConversionSettings": {
+							"allowDataTruncation": true,
+							"treatBooleanAsNumber": false
+						}
+					}
+				},
+				"inputs": [
+					{
+						"referenceName": "df_camsis_bip_storage",
+						"type": "DatasetReference",
+						"parameters": {
+							"folder_name": "paid-invoices",
+							"file_name": {
+								"value": "@variables('report_file_name')",
+								"type": "Expression"
+							}
+						}
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "df_camsis_bip_storage",
+						"type": "DatasetReference",
+						"parameters": {
+							"folder_name": "paid-invoices/archive",
+							"file_name": {
+								"value": "@variables('report_file_name')",
+								"type": "Expression"
+							}
+						}
+					}
+				]
+			},
+			{
+				"name": "Clean Up",
+				"type": "Delete",
+				"dependsOn": [
+					{
+						"activity": "Archive",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"dataset": {
+						"referenceName": "df_camsis_bip_storage",
+						"type": "DatasetReference",
+						"parameters": {
+							"folder_name": "paid-invoices",
+							"file_name": {
+								"value": "@variables('report_file_name')",
+								"type": "Expression"
+							}
+						}
+					},
+					"enableLogging": false,
+					"storeSettings": {
+						"type": "AzureBlobStorageReadSettings",
+						"recursive": true,
+						"enablePartitionDiscovery": false
+					}
+				}
+			},
+			{
+				"name": "Set Report File name",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Call BIP Report",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "report_file_name",
+					"value": {
+						"value": "@concat('paid_invoices_', formatDateTime(utcNow(), 'yyyyMMddHHmmss'),'.csv')",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "update sync status",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "Set Report File name",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "INSERT INTO [dbo].[tb_combined_payment_status_sync] \n    ([correlation_id], [bip_file_name], [status])\nVALUES \n    ('@{pipeline().RunId}', '@{variables('report_file_name')}', '@{activity('Call BIP Report').output.pipelineReturnValue.final_status}')",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			}
+		],
+		"variables": {
+			"start_date": {
+				"type": "String",
+				"defaultValue": "A"
+			},
+			"end_date": {
+				"type": "String",
+				"defaultValue": "B"
+			},
+			"payload": {
+				"type": "String"
+			},
+			"report_file_name": {
+				"type": "String"
+			}
+		},
+		"folder": {
+			"name": "df_fusion_to_camsis_payment_confirmation"
+		},
+		"annotations": [],
+		"lastPublishTime": "2026-03-19T11:47:35Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

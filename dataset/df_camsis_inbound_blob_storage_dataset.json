@@ -1,0 +1,158 @@
+{
+	"name": "df_camsis_inbound_blob_storage_dataset",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "uis_df_storage_linked_service",
+			"type": "LinkedServiceReference"
+		},
+		"parameters": {
+			"folder_name": {
+				"type": "string"
+			},
+			"file_name": {
+				"type": "string"
+			}
+		},
+		"folder": {
+			"name": "df_camsis_ap_invoices_inbound_datasets"
+		},
+		"annotations": [],
+		"type": "Json",
+		"typeProperties": {
+			"location": {
+				"type": "AzureBlobStorageLocation",
+				"fileName": {
+					"value": "@dataset().file_name",
+					"type": "Expression"
+				},
+				"folderPath": {
+					"value": "@dataset().folder_name",
+					"type": "Expression"
+				},
+				"container": "blob-container-camsis"
+			}
+		},
+		"schema": {
+			"type": "object",
+			"properties": {
+				"BatchId": {
+					"type": "string"
+				},
+				"SourceSystem": {
+					"type": "string"
+				},
+				"Invoices": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"properties": {
+							"Supplier": {
+								"type": "object",
+								"properties": {
+									"SupplierName": {
+										"type": "string"
+									},
+									"SupplierNumber": {
+										"type": "string"
+									},
+									"SupplierIdentifier": {
+										"type": "string"
+									}
+								}
+							},
+							"InvoiceHeader": {
+								"type": "object",
+								"properties": {
+									"InvoiceNumber": {
+										"type": "string"
+									},
+									"InvoiceDate": {
+										"type": "string"
+									},
+									"InvoiceAmount": {
+										"type": "integer"
+									},
+									"InvoiceCurrency": {
+										"type": "string"
+									},
+									"PaymentCurrency": {
+										"type": "string"
+									},
+									"Description": {
+										"type": "string"
+									},
+									"InvoiceType": {
+										"type": "string"
+									},
+									"BusinessUnit": {
+										"type": "string"
+									},
+									"SupplierSite": {
+										"type": "string"
+									},
+									"PaymentTerms": {
+										"type": "string"
+									},
+									"AccountingDate": {
+										"type": "string"
+									},
+									"LiabilityCombination": {
+										"type": "string"
+									},
+									"InvoiceLines": {
+										"type": "array",
+										"items": {
+											"type": "object",
+											"properties": {
+												"LineNumber": {
+													"type": "integer"
+												},
+												"LineAmount": {
+													"type": "integer"
+												},
+												"LineType": {
+													"type": "string"
+												},
+												"Description": {
+													"type": "string"
+												},
+												"ItemDescription": {
+													"type": "string"
+												},
+												"DistributionCombination": {
+													"type": "string"
+												},
+												"ProjectNumber": {
+													"type": "string"
+												},
+												"Task": {
+													"type": "string"
+												},
+												"ExpenditureType": {
+													"type": "string"
+												},
+												"ExpenditureOrganization": {
+													"type": "string"
+												},
+												"Award": {
+													"type": "string"
+												},
+												"TaxClassificationCode": {
+													"type": "string"
+												},
+												"TaxControlAmount": {
+													"type": "string"
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}

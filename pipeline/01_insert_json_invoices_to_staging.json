@@ -1,0 +1,1108 @@
+{
+	"name": "01_insert_json_invoices_to_staging",
+	"properties": {
+		"activities": [
+			{
+				"name": "List Json",
+				"type": "GetMetadata",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"dataset": {
+						"referenceName": "df_camsis_inbound_blob_storage_dataset",
+						"type": "DatasetReference",
+						"parameters": {
+							"folder_name": "raw",
+							"file_name": "*"
+						}
+					},
+					"fieldList": [
+						"childItems"
+					],
+					"storeSettings": {
+						"type": "AzureBlobStorageReadSettings",
+						"recursive": true,
+						"enablePartitionDiscovery": false
+					},
+					"formatSettings": {
+						"type": "JsonReadSettings"
+					}
+				}
+			},
+			{
+				"name": "If Condition",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "List Json",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@greater(length(activity('List Json').output.childItems),0)",
+						"type": "Expression"
+					},
+					"ifFalseActivities": [
+						{
+							"name": "No Files Logging",
+							"type": "Wait",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"waitTimeInSeconds": 1
+							}
+						}
+					],
+					"ifTrueActivities": [
+						{
+							"name": "Insert Into Invoice Staging",
+							"type": "Copy",
+							"dependsOn": [
+								{
+									"activity": "Start Date",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								},
+								{
+									"activity": "End Date",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								},
+								{
+									"activity": "Flatten Json",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								},
+								{
+									"activity": "Import supplier data",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								},
+								{
+									"activity": "tb_bu_data",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "AzureSqlSource",
+									"sqlReaderQuery": {
+										"value": "@concat('\nWITH InvoiceHeaderValidation AS (\n    SELECT \n        r.Batch_Id,\n        r.Source,\n        r.Supplier_Name,\n        r.Supplier_Number,\n        r.Supplier_Identifier,\n        r.Invoice_Number,\n        r.Invoice_Date,\n        r.Invoice_Amount,\n        r.Invoice_Currency,\n        r.Header_Description,\n        r.Metadata_Unique_Identifier,\n        \n        SUM(r.Line_Amount) AS Total_Line_Amount,\n        COUNT(*) AS Line_Count,\n        \n        s.BUSINESS_UNIT_NAME AS Business_Unit,\n        ''STANDARD'' AS Invoice_Type,\n        ''BACS'' AS Payment_Method,\n        r.Invoice_Currency AS Payment_Currency,\n        ''OOS'' AS Tax_Classification_Code,\n        s.TERMS_NAME AS Payment_Terms,\n        s.VENDOR_SITE_CODE AS Supplier_Site,\n        \n        CASE \n            WHEN TRY_CAST(r.Invoice_Date AS DATE) BETWEEN ''', variables('start_date'), ''' AND ''', variables('end_date'), '''\n            THEN FORMAT(TRY_CAST(r.Invoice_Date AS DATE), ''yyyy/MM/dd'')\n            ELSE FORMAT(GETDATE(), ''yyyy/MM/dd'')\n        END AS Accounting_Date,\n        \n        CASE WHEN r.Source IS NULL OR r.Source = '''' THEN 0 ELSE 1 END AS Valid_Source,\n        CASE WHEN r.Source = ''CamSIS'' THEN 1 ELSE 0 END AS Valid_Source_Value,\n        CASE WHEN r.Invoice_Number IS NULL OR r.Invoice_Number = '''' THEN 0 ELSE 1 END AS Valid_Invoice_Number,\n        CASE WHEN r.Invoice_Amount IS NULL THEN 0 ELSE 1 END AS Valid_Invoice_Amount,\n        CASE WHEN r.Invoice_Date IS NULL OR r.Invoice_Date = '''' THEN 0 ELSE 1 END AS Valid_Invoice_Date,\n        CASE WHEN r.Supplier_Number IS NULL OR r.Supplier_Number = '''' THEN 0 ELSE 1 END AS Valid_Supplier_Number,\n        CASE WHEN s.SUPPLIER_NUMBER IS NOT NULL THEN 1 ELSE 0 END AS Valid_Supplier_Exists,\n        CASE WHEN s.BUSINESS_UNIT_NAME = ''Academic University'' THEN 1 ELSE 0 END AS Valid_Business_Unit,\n        CASE WHEN NOT EXISTS (\n            SELECT 1 FROM dbo.tb_ap_invoices_staging stg \n            WHERE stg.SupplierNumber = r.Supplier_Number \n            AND stg.InvoiceNumber = r.Invoice_Number\n            AND stg.Source = r.Source\n        ) THEN 1 ELSE 0 END AS Valid_Unique_Invoice\n        \n    FROM dbo.tb_ap_invoices_raw r\n    LEFT JOIN dbo.tb_supplier_details s \n        ON CAST(r.Supplier_Number AS NVARCHAR(100)) = CAST(s.SUPPLIER_NUMBER AS NVARCHAR(100))\n    GROUP BY \n        r.Batch_Id,\n        r.Source,\n        r.Supplier_Name,\n        r.Supplier_Number,\n        r.Supplier_Identifier,\n        r.Invoice_Number,\n        r.Invoice_Date,\n        r.Invoice_Amount,\n        r.Invoice_Currency,\n        r.Header_Description,\n        r.Metadata_Unique_Identifier,\n        s.TERMS_NAME,\n        s.VENDOR_SITE_CODE,\n        s.SUPPLIER_NUMBER,\n        s.BUSINESS_UNIT_NAME\n)\n\nSELECT \n    hv.Batch_Id,\n    hv.Source,\n    hv.Supplier_Name,\n    hv.Supplier_Number,\n    hv.Supplier_Identifier,\n    hv.Invoice_Number,\n    hv.Invoice_Date,\n    hv.Invoice_Amount,\n    hv.Invoice_Currency,\n    hv.Header_Description,\n    hv.Payment_Currency,\n    hv.Business_Unit,\n    hv.Invoice_Type,\n    hv.Payment_Method,\n    hv.Payment_Terms,\n    hv.Supplier_Site,\n    hv.Accounting_Date,\n    hv.Tax_Classification_Code,\n    hv.Metadata_Unique_Identifier,\n    hv.Total_Line_Amount,\n    hv.Line_Count,\n    CASE WHEN hv.Invoice_Amount = hv.Total_Line_Amount THEN 1 ELSE 0 END AS Valid_Amount_Balance,\n    CASE \n        WHEN hv.Valid_Source = 1\n            AND hv.Valid_Source_Value = 1\n            AND hv.Valid_Invoice_Number = 1\n            AND hv.Valid_Invoice_Amount = 1\n            AND hv.Valid_Invoice_Date = 1\n            AND hv.Valid_Supplier_Number = 1\n            AND hv.Valid_Supplier_Exists = 1\n            AND hv.Valid_Business_Unit = 1\n            AND hv.Valid_Unique_Invoice = 1\n            AND hv.Invoice_Amount = hv.Total_Line_Amount\n        THEN ''Validation Success''\n        ELSE ''Validation Failed''\n    END AS Validation_Status,\n    CASE \n        WHEN hv.Valid_Source = 0 THEN ''BR2: Source is required''\n        WHEN hv.Valid_Source_Value = 0 THEN ''BR2: Source must be CamSIS''\n        WHEN hv.Valid_Invoice_Number = 0 THEN ''BR2: Invoice Number is required''\n        WHEN hv.Valid_Invoice_Amount = 0 THEN ''BR2: Invoice Amount is required''\n        WHEN hv.Valid_Invoice_Date = 0 THEN ''BR2: Invoice Date is required''\n        WHEN hv.Valid_Supplier_Number = 0 THEN ''BR2/BR7: Supplier Number is required''\n        WHEN hv.Valid_Supplier_Exists = 0 THEN ''BR7: Supplier Number not found in Oracle''\n        WHEN hv.Valid_Business_Unit = 0 THEN ''BR1: Supplier Business Unit must be Academic University''\n        WHEN hv.Valid_Unique_Invoice = 0 THEN ''BR4: Duplicate Invoice (Supplier + Invoice Number exists)''\n        WHEN hv.Invoice_Amount <> hv.Total_Line_Amount THEN ''BR2: Invoice Amount does not match sum of Line Amounts''\n        ELSE NULL\n    END AS Validation_Error,\n    0 AS Processed_Bit,\n    NULL AS Processed_At,\n    GETDATE() AS Invoice_Received_Date\nFROM InvoiceHeaderValidation hv;\n')",
+										"type": "Expression"
+									},
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"sink": {
+									"type": "AzureSqlSink",
+									"writeBehavior": "insert",
+									"sqlWriterUseTableLock": false
+								},
+								"enableStaging": false,
+								"translator": {
+									"type": "TabularTranslator",
+									"mappings": [
+										{
+											"source": {
+												"name": "Batch_Id",
+												"type": "String",
+												"physicalType": "nvarchar"
+											},
+											"sink": {
+												"name": "BatchId",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "Source",
+												"type": "String",
+												"physicalType": "nvarchar"
+											},
+											"sink": {
+												"name": "Source",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "Supplier_Name",
+												"type": "String",
+												"physicalType": "nvarchar"
+											},
+											"sink": {
+												"name": "SupplierName",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "Supplier_Number",
+												"type": "String",
+												"physicalType": "nvarchar"
+											},
+											"sink": {
+												"name": "SupplierNumber",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "Invoice_Number",
+												"type": "String",
+												"physicalType": "nvarchar"
+											},
+											"sink": {
+												"name": "InvoiceNumber",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "Invoice_Date",
+												"type": "String",
+												"physicalType": "nvarchar"
+											},
+											"sink": {
+												"name": "InvoiceDate",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "Invoice_Amount",
+												"type": "Decimal",
+												"physicalType": "decimal",
+												"scale": 2,
+												"precision": 18
+											},
+											"sink": {
+												"name": "InvoiceAmount",
+												"type": "Decimal",
+												"physicalType": "decimal",
+												"scale": 2,
+												"precision": 18
+											}
+										},
+										{
+											"source": {
+												"name": "Invoice_Currency",
+												"type": "String",
+												"physicalType": "nvarchar"
+											},
+											"sink": {
+												"name": "InvoiceCurrency",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "Payment_Currency",
+												"type": "String",
+												"physicalType": "nvarchar"
+											},
+											"sink": {
+												"name": "PaymentCurrency",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "Header_Description",
+												"type": "String",
+												"physicalType": "nvarchar"
+											},
+											"sink": {
+												"name": "Description",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "Invoice_Type",
+												"type": "String",
+												"physicalType": "varchar"
+											},
+											"sink": {
+												"name": "InvoiceType",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "Business_Unit",
+												"type": "String",
+												"physicalType": "nvarchar"
+											},
+											"sink": {
+												"name": "BusinessUnit",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "Supplier_Site",
+												"type": "String",
+												"physicalType": "nvarchar"
+											},
+											"sink": {
+												"name": "SupplierSite",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "Payment_Terms",
+												"type": "String",
+												"physicalType": "nvarchar"
+											},
+											"sink": {
+												"name": "PaymentTerms",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "Accounting_Date",
+												"type": "String",
+												"physicalType": "nvarchar"
+											},
+											"sink": {
+												"name": "AccountingDate",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "Payment_Method",
+												"type": "String",
+												"physicalType": "varchar"
+											},
+											"sink": {
+												"name": "PaymentMethod",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "Metadata_Unique_Identifier",
+												"type": "String",
+												"physicalType": "nvarchar"
+											},
+											"sink": {
+												"name": "MetadataUniqueIdentifier",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "Validation_Status",
+												"type": "String",
+												"physicalType": "varchar"
+											},
+											"sink": {
+												"name": "validation_status",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "Processed_Bit",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"name": "processed_bit",
+												"type": "Int32",
+												"physicalType": "int"
+											}
+										},
+										{
+											"source": {
+												"name": "Invoice_Received_Date",
+												"type": "DateTime",
+												"physicalType": "datetime"
+											},
+											"sink": {
+												"name": "InvoiceReceivedDate",
+												"type": "Date",
+												"physicalType": "date"
+											}
+										},
+										{
+											"source": {
+												"name": "Validation_Error"
+											},
+											"sink": {
+												"name": "validation_reason"
+											}
+										}
+									],
+									"typeConversion": true,
+									"typeConversionSettings": {
+										"allowDataTruncation": true,
+										"treatBooleanAsNumber": false
+									}
+								}
+							},
+							"inputs": [
+								{
+									"referenceName": "df_camsis_ap_invoices_raw_table_dataset",
+									"type": "DatasetReference",
+									"parameters": {
+										"table_name": "*"
+									}
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "df_camsis_ap_invoices_lines_raw_table_dataset",
+									"type": "DatasetReference",
+									"parameters": {
+										"table_name": "tb_ap_invoices_staging"
+									}
+								}
+							]
+						},
+						{
+							"name": "Insert Into Invoice Lines Staging",
+							"type": "Copy",
+							"dependsOn": [
+								{
+									"activity": "Insert Into Invoice Staging",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "AzureSqlSource",
+									"sqlReaderQuery": {
+										"value": "\nWITH HeaderValidationStatus AS (\n    SELECT \n        r.Batch_Id,\n        r.Invoice_Number,\n        r.Source,\n        r.Supplier_Number,\n        r.Invoice_Amount,\n        SUM(r.Line_Amount) AS Total_Line_Amount,\n        \n        CASE \n            WHEN r.Source IS NULL OR r.Source = '' OR UPPER(r.Source) <> 'CAMSIS' THEN 0\n            WHEN r.Invoice_Number IS NULL OR r.Invoice_Number = '' THEN 0\n            WHEN r.Invoice_Amount IS NULL THEN 0\n            WHEN r.Invoice_Date IS NULL OR r.Invoice_Date = '' THEN 0\n            WHEN r.Supplier_Number IS NULL OR r.Supplier_Number = '' THEN 0\n            WHEN NOT EXISTS (\n                SELECT 1 FROM dbo.tb_supplier_details s \n                WHERE CAST(s.SUPPLIER_NUMBER AS NVARCHAR(100)) = CAST(r.Supplier_Number AS NVARCHAR(100))\n            ) THEN 0\n            WHEN NOT EXISTS (\n                SELECT 1 FROM dbo.tb_supplier_details s \n                WHERE CAST(s.SUPPLIER_NUMBER AS NVARCHAR(100)) = CAST(r.Supplier_Number AS NVARCHAR(100))\n                AND s.BUSINESS_UNIT_NAME = 'Academic University'\n            ) THEN 0\n            WHEN EXISTS (\n                SELECT 1 FROM dbo.tb_ap_invoices_staging stg \n                WHERE stg.SupplierNumber = r.Supplier_Number \n                AND stg.InvoiceNumber = r.Invoice_Number\n                AND UPPER(stg.Source) = UPPER(r.Source)\n                AND stg.BatchId <> r.Batch_Id  -- Exclude current batch\n            ) THEN 0\n            ELSE 1\n        END AS Header_Valid\n        \n    FROM dbo.tb_ap_invoices_raw r\n    GROUP BY \n        r.Batch_Id,\n        r.Invoice_Number,\n        r.Source,\n        r.Supplier_Number,\n        r.Invoice_Amount,\n        r.Invoice_Date\n),\nHeaderWithAmountCheck AS (\n    SELECT \n        hvs.*,\n        CASE \n            WHEN hvs.Header_Valid = 1 AND hvs.Invoice_Amount = hvs.Total_Line_Amount THEN 'Validation Success'\n            ELSE 'Validation Failed'\n        END AS Header_Validation_Status\n    FROM HeaderValidationStatus hvs\n)\n\nSELECT \n    r.Id,\n    r.Batch_Id,\n    r.Source,\n    r.Invoice_Number,\n    r.Line_Number,\n    r.Line_Amount,\n    'ITEM' AS Line_Type,\n    r.Line_Description,\n    r.Distribution_Combination,\n    r.Project_Number,\n    r.Task,\n    r.Expenditure_Type,\n    r.Expenditure_Organization,\n    r.Award,\n    r.Metadata_Unique_Identifier,\n    'OOS' AS Tax_Classification_Code,\n    h.Header_Validation_Status AS Validation_Status,\n    CASE \n        WHEN h.Header_Validation_Status = 'Validation Failed' \n        THEN 'Header validation failed - all lines rejected'\n        ELSE NULL\n    END AS Validation_Error,\n    0 AS Processed_Bit,\n    NULL AS Processed_At\n\nFROM dbo.tb_ap_invoices_raw r\nINNER JOIN HeaderWithAmountCheck h \n    ON r.Batch_Id = h.Batch_Id \n    AND r.Invoice_Number = h.Invoice_Number\nORDER BY \n    r.Batch_Id,\n    r.Invoice_Number,\n    r.Line_Number;",
+										"type": "Expression"
+									},
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"sink": {
+									"type": "AzureSqlSink",
+									"writeBehavior": "insert",
+									"sqlWriterUseTableLock": false
+								},
+								"enableStaging": false,
+								"translator": {
+									"type": "TabularTranslator",
+									"mappings": [
+										{
+											"source": {
+												"name": "Batch_Id",
+												"type": "String",
+												"physicalType": "nvarchar"
+											},
+											"sink": {
+												"name": "BatchId",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "Source",
+												"type": "String",
+												"physicalType": "nvarchar"
+											},
+											"sink": {
+												"name": "Source",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "Invoice_Number",
+												"type": "String",
+												"physicalType": "nvarchar"
+											},
+											"sink": {
+												"name": "InvoiceNumber",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "Line_Number",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"name": "LineNumber",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "Line_Amount",
+												"type": "Decimal",
+												"physicalType": "decimal",
+												"scale": 2,
+												"precision": 18
+											},
+											"sink": {
+												"name": "LineAmount",
+												"type": "Decimal",
+												"physicalType": "decimal",
+												"scale": 2,
+												"precision": 18
+											}
+										},
+										{
+											"source": {
+												"name": "Line_Type",
+												"type": "String",
+												"physicalType": "varchar"
+											},
+											"sink": {
+												"name": "LineType",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "Line_Description",
+												"type": "String",
+												"physicalType": "nvarchar"
+											},
+											"sink": {
+												"name": "Description",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "Distribution_Combination",
+												"type": "String",
+												"physicalType": "nvarchar"
+											},
+											"sink": {
+												"name": "DistributionCombination",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "Project_Number",
+												"type": "String",
+												"physicalType": "nvarchar"
+											},
+											"sink": {
+												"name": "ProjectNumber",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "Task",
+												"type": "String",
+												"physicalType": "nvarchar"
+											},
+											"sink": {
+												"name": "Task",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "Expenditure_Type",
+												"type": "String",
+												"physicalType": "nvarchar"
+											},
+											"sink": {
+												"name": "ExpenditureType",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "Expenditure_Organization",
+												"type": "String",
+												"physicalType": "nvarchar"
+											},
+											"sink": {
+												"name": "ExpenditureOrganization",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "Award",
+												"type": "String",
+												"physicalType": "nvarchar"
+											},
+											"sink": {
+												"name": "Award",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "Metadata_Unique_Identifier",
+												"type": "String",
+												"physicalType": "nvarchar"
+											},
+											"sink": {
+												"name": "MetadataUniqueIdentifier",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "Tax_Classification_Code",
+												"type": "String",
+												"physicalType": "varchar"
+											},
+											"sink": {
+												"name": "TaxClassificationCode",
+												"type": "Int32",
+												"physicalType": "int"
+											}
+										},
+										{
+											"source": {
+												"name": "Validation_Status",
+												"type": "String",
+												"physicalType": "varchar"
+											},
+											"sink": {
+												"name": "validation_status",
+												"type": "String",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "Processed_Bit",
+												"type": "Int32",
+												"physicalType": "int"
+											},
+											"sink": {
+												"name": "processed_bit",
+												"type": "Int32",
+												"physicalType": "int"
+											}
+										},
+										{
+											"source": {
+												"name": "Validation_Error"
+											},
+											"sink": {
+												"name": "validation_reason"
+											}
+										}
+									],
+									"typeConversion": true,
+									"typeConversionSettings": {
+										"allowDataTruncation": true,
+										"treatBooleanAsNumber": false
+									}
+								}
+							},
+							"inputs": [
+								{
+									"referenceName": "df_camsis_ap_invoices_lines_raw_table_dataset",
+									"type": "DatasetReference",
+									"parameters": {
+										"table_name": "*"
+									}
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "df_camsis_ap_invoices_lines_raw_table_dataset",
+									"type": "DatasetReference",
+									"parameters": {
+										"table_name": "tb_ap_invoice_lines_staging"
+									}
+								}
+							]
+						},
+						{
+							"name": "Get Open Accounting Period",
+							"type": "WebActivity",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"method": "GET",
+								"relativeUrl": "/fscmRestApi/resources/11.13.18.05/accountingPeriodStatusLOV?q=ApplicationId=200;ClosingStatus=O"
+							},
+							"linkedServiceName": {
+								"referenceName": "uis_fusion_base_url_linked_service",
+								"type": "LinkedServiceReference"
+							}
+						},
+						{
+							"name": "Start Date",
+							"type": "SetVariable",
+							"dependsOn": [
+								{
+									"activity": "Get Open Accounting Period",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "start_date",
+								"value": {
+									"value": "@formatDateTime(activity('Get Open Accounting Period').output.items[0].StartDate,'yyyy-MM-dd')",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "End Date",
+							"type": "SetVariable",
+							"dependsOn": [
+								{
+									"activity": "Get Open Accounting Period",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "end_date",
+								"value": {
+									"value": "@formatDateTime(activity('Get Open Accounting Period').output.items[0].EndDate,'yyyy-MM-dd')",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "Flatten Json",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"policy": {
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "flatten_each_json_files",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"json_file_list": {
+										"value": "@activity('List Json').output.childItems",
+										"type": "Expression"
+									}
+								}
+							}
+						},
+						{
+							"name": "Import supplier data",
+							"type": "Copy",
+							"dependsOn": [
+								{
+									"activity": "Supplier BIP Report",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "DelimitedTextSource",
+									"storeSettings": {
+										"type": "AzureBlobStorageReadSettings",
+										"recursive": true,
+										"enablePartitionDiscovery": false
+									},
+									"formatSettings": {
+										"type": "DelimitedTextReadSettings"
+									}
+								},
+								"sink": {
+									"type": "AzureSqlSink",
+									"preCopyScript": "TRUNCATE TABLE [dbo].[tb_supplier_details]",
+									"writeBehavior": "insert",
+									"sqlWriterUseTableLock": false,
+									"disableMetricsCollection": false
+								},
+								"enableStaging": false,
+								"translator": {
+									"type": "TabularTranslator",
+									"mappings": [
+										{
+											"source": {
+												"name": "SUPPLIER_NAME",
+												"physicalType": "String"
+											},
+											"sink": {
+												"name": "SUPPLIER_NAME",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "SUPPLIER_NUMBER",
+												"physicalType": "String"
+											},
+											"sink": {
+												"name": "SUPPLIER_NUMBER",
+												"physicalType": "nvarchar"
+											}
+										},
+										{
+											"source": {
+												"name": "PARTY_NUMBER"
+											},
+											"sink": {
+												"name": "PARTY_NUMBER"
+											}
+										},
+										{
+											"source": {
+												"name": "VENDOR_SITE_CODE"
+											},
+											"sink": {
+												"name": "VENDOR_SITE_CODE"
+											}
+										},
+										{
+											"source": {
+												"name": "BUSINESS_UNIT_ID"
+											},
+											"sink": {
+												"name": "BUSINESS_UNIT_ID"
+											}
+										},
+										{
+											"source": {
+												"name": "BUSINESS_UNIT_NAME"
+											},
+											"sink": {
+												"name": "BUSINESS_UNIT_NAME"
+											}
+										},
+										{
+											"source": {
+												"name": "TERMS_ID"
+											},
+											"sink": {
+												"name": "TERMS_ID"
+											}
+										},
+										{
+											"source": {
+												"name": "TERMS_NAME"
+											},
+											"sink": {
+												"name": "TERMS_NAME"
+											}
+										}
+									],
+									"typeConversion": true,
+									"typeConversionSettings": {
+										"allowDataTruncation": true,
+										"treatBooleanAsNumber": false
+									}
+								}
+							},
+							"inputs": [
+								{
+									"referenceName": "common_lookup_storage_dataset",
+									"type": "DatasetReference",
+									"parameters": {
+										"folder_name": "bip/Report",
+										"file_name": {
+											"value": "@activity('Supplier BIP Report').output.pipelineReturnValue.file_name",
+											"type": "Expression"
+										}
+									}
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "df_camsis_ap_invoices_lines_raw_table_dataset",
+									"type": "DatasetReference",
+									"parameters": {
+										"table_name": "tb_supplier_details"
+									}
+								}
+							]
+						},
+						{
+							"name": "Supplier BIP Report",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"policy": {
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "ftp_download_bip_report",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"payload": {
+										"value": "{\n  \"OperationName\": \"submitESSJobRequest\",\n  \"JobPackageName\": \"/oracle/apps/ess/custom/oracle/apps/ess/custom\",\n  \"JobDefName\": \"UoCSupplierList\",\n  \"ESSParameters\": \"\"\n}",
+										"type": "Expression"
+									},
+									"targetDirectory": {
+										"value": "common/bip",
+										"type": "Expression"
+									}
+								}
+							}
+						},
+						{
+							"name": "Delete Reports",
+							"type": "Delete",
+							"dependsOn": [
+								{
+									"activity": "Insert Into Invoice Lines Staging",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"dataset": {
+									"referenceName": "common_lookup_storage_dataset",
+									"type": "DatasetReference",
+									"parameters": {
+										"folder_name": "bip",
+										"file_name": "*"
+									}
+								},
+								"enableLogging": false,
+								"storeSettings": {
+									"type": "AzureBlobStorageReadSettings",
+									"recursive": true,
+									"wildcardFileName": "*",
+									"enablePartitionDiscovery": false
+								}
+							}
+						},
+						{
+							"name": "tb_bu_data",
+							"type": "Copy",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "RestSource",
+									"httpRequestTimeout": "00:01:40",
+									"requestInterval": "00.00:00:00.010",
+									"requestMethod": "GET",
+									"paginationRules": {
+										"supportRFC5988": "true"
+									}
+								},
+								"sink": {
+									"type": "AzureSqlSink",
+									"preCopyScript": "TRUNCATE TABLE [dbo].[tb_bu_details]",
+									"writeBehavior": "insert",
+									"sqlWriterUseTableLock": false,
+									"disableMetricsCollection": false
+								},
+								"enableStaging": false,
+								"translator": {
+									"type": "TabularTranslator",
+									"mappings": [
+										{
+											"source": {
+												"path": "['BusinessUnitId']"
+											},
+											"sink": {
+												"name": "BUSINESS_UNIT_ID",
+												"type": "String"
+											}
+										},
+										{
+											"source": {
+												"path": "['Name']"
+											},
+											"sink": {
+												"name": "BUSINESS_UNIT_NAME",
+												"type": "String"
+											}
+										},
+										{
+											"source": {
+												"path": "['LegalEntityId']"
+											},
+											"sink": {
+												"name": "LEGAL_ENTITY_ID",
+												"type": "String"
+											}
+										},
+										{
+											"source": {
+												"path": "['PrimaryLedgerId']"
+											},
+											"sink": {
+												"name": "LEDGER_ID",
+												"type": "String"
+											}
+										}
+									],
+									"collectionReference": "$['items']",
+									"mapComplexValuesToString": true
+								}
+							},
+							"inputs": [
+								{
+									"referenceName": "df_ftp_bu_details",
+									"type": "DatasetReference"
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "df_camsis_ap_invoices_lines_raw_table_dataset",
+									"type": "DatasetReference",
+									"parameters": {
+										"table_name": "tb_bu_details"
+									}
+								}
+							]
+						}
+					]
+				}
+			}
+		],
+		"parameters": {
+			"base_url": {
+				"type": "string",
+				"defaultValue": "https://fa-evjk-dev5-saasfaprod1.fa.ocs.oraclecloud.com:443"
+			}
+		},
+		"variables": {
+			"BU_ID": {
+				"type": "String"
+			},
+			"SUPPLIER_ID": {
+				"type": "String"
+			},
+			"start_date": {
+				"type": "String",
+				"defaultValue": "2025-12-31"
+			},
+			"end_date": {
+				"type": "String",
+				"defaultValue": "2025-12-01"
+			}
+		},
+		"folder": {
+			"name": "df_camsis_to_fusion_ap_invoices"
+		},
+		"annotations": [],
+		"lastPublishTime": "2026-02-06T17:11:51Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

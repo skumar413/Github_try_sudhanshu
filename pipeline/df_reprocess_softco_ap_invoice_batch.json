@@ -1,0 +1,92 @@
+{
+	"name": "df_reprocess_softco_ap_invoice_batch",
+	"properties": {
+		"activities": [
+			{
+				"name": "Reset Batch Processed Flags",
+				"type": "Script",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.02:00:00",
+					"retry": 1,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "@concat('UPDATE [dbo].[tbl_generic_ap_invoice_lines_staging] SET [Processed_bit] = 0, [processed_at] = NULL WHERE [batchId] = TRY_CONVERT(uniqueidentifier, ''', pipeline().parameters.p_batch_id, ''') AND [ValidationStatus] = ''Validation Success''; UPDATE [dbo].[tbl_generic_ap_invoice_header_staging] SET [Processed_bit] = 0, [processed_at] = NULL WHERE [batchId] = TRY_CONVERT(uniqueidentifier, ''', pipeline().parameters.p_batch_id, ''') AND [ValidationStatus] = ''Validation Success''; UPDATE [dbo].[tbl_integration_batch] SET [batch_status] = ''Ready For Reprocess'', [current_stage] = ''Reprocess Delivery'', [updated_at_utc] = SYSUTCDATETIME() WHERE [batch_id] = TRY_CONVERT(uniqueidentifier, ''', pipeline().parameters.p_batch_id, ''');')",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "00:30:00"
+				}
+			},
+			{
+				"name": "Re-run Delivery Pipeline",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Reset Batch Processed Flags",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "df_softco_ap_invoice_orchestrator",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"p_batch_id": {
+							"value": "@pipeline().parameters.p_batch_id",
+							"type": "Expression"
+						},
+						"p_source_system": {
+							"value": "@pipeline().parameters.p_source_system",
+							"type": "Expression"
+						},
+						"p_entity_name": {
+							"value": "@pipeline().parameters.p_entity_name",
+							"type": "Expression"
+						}
+					}
+				}
+			}
+		],
+		"parameters": {
+			"p_batch_id": {
+				"type": "String"
+			},
+			"p_source_system": {
+				"type": "String",
+				"defaultValue": "SoftCo"
+			},
+			"p_entity_name": {
+				"type": "String",
+				"defaultValue": "AP Invoice"
+			}
+		},
+		"folder": {
+			"name": "df_softco_to_fusion_ap_invoice_inbound_integration (IN-04)/manual trigger - reprocess a batch"
+		},
+		"annotations": [],
+		"lastPublishTime": "2026-03-27T18:37:42Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

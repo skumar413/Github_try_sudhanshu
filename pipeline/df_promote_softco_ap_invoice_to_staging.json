@@ -1,0 +1,343 @@
+{
+	"name": "df_promote_softco_ap_invoice_to_staging",
+	"properties": {
+		"activities": [
+			{
+				"name": "Log Pipeline Start",
+				"type": "Script",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.01:00:00",
+					"retry": 1,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "@concat('UPDATE [dbo].[tbl_integration_batch] SET [current_stage] = ''Promote To Staging'', [batch_status] = ''Promoting'', [updated_at_utc] = SYSUTCDATETIME() WHERE [batch_id] = TRY_CONVERT(uniqueidentifier, ''', pipeline().parameters.p_batch_id, ''');')",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "00:30:00"
+				}
+			},
+			{
+				"name": "Delete Existing Batch Rows",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "Log Pipeline Start",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.02:00:00",
+					"retry": 1,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "@concat('DELETE FROM [dbo].[tbl_generic_ap_invoice_lines_staging] WHERE [batchId] = TRY_CONVERT(uniqueidentifier, ''', pipeline().parameters.p_batch_id, '''); DELETE FROM [dbo].[tbl_generic_ap_invoice_header_staging] WHERE [batchId] = TRY_CONVERT(uniqueidentifier, ''', pipeline().parameters.p_batch_id, '''); DELETE FROM [dbo].[tbl_integration_delivery_group] WHERE [batch_id] = TRY_CONVERT(uniqueidentifier, ''', pipeline().parameters.p_batch_id, '''); DELETE FROM [dbo].[tbl_integration_ess_request] WHERE [batch_id] = TRY_CONVERT(uniqueidentifier, ''', pipeline().parameters.p_batch_id, '''); DELETE FROM [dbo].[tbl_integration_document_status] WHERE [batch_id] = TRY_CONVERT(uniqueidentifier, ''', pipeline().parameters.p_batch_id, '''); DELETE FROM [dbo].[tbl_source_notification_table] WHERE [batch_id] = TRY_CONVERT(uniqueidentifier, ''', pipeline().parameters.p_batch_id, ''') AND [process_stage] = ''VALIDATION'';')",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "00:30:00"
+				}
+			},
+			{
+				"name": "Insert Header Staging Rows",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "Delete Existing Batch Rows",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.04:00:00",
+					"retry": 1,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "@concat(\n'INSERT INTO [dbo].[tbl_generic_ap_invoice_header_staging] (\n    [Business Unit],\n    [Source],\n    [Invoice Number],\n    [Invoice Amount],\n    [Invoice Date],\n    [Supplier Name],\n    [Supplier Number],\n    [Supplier Site],\n    [Invoice Currency],\n    [Payment Currency],\n    [Description],\n    [Invoice Type],\n    [Legal Entity],\n    [Payment Terms],\n    [Accounting Date],\n    [Tax Control Amount],\n    [Attribute 2],\n    [ValidationStatus],\n    [Processed_bit],\n    [processed_at],\n    [validation_reason],\n    [batchId],\n    [MetadataUniqueIdentifies],\n    [source_system],\n    [entity_name],\n    [ledger_id],\n    [invoice_status],\n    [Liability Combination]\n)\nSELECT\n    v.[bu_name],\n    COALESCE(v.[source], ''', pipeline().parameters.p_source_system, '''),\n    v.[invoice_number],\n    v.[invoice_amount],\n    v.[invoice_date],\n    v.[supplier_name],\n    v.[supplier_number],\n    v.[supplier_site_code],\n    v.[invoice_currency_code],\n    v.[invoice_currency_code],\n    v.[description],\n    v.[invoice_type],\n    bu.[LEGAL_ENTITY_NAME],\n    v.[payment_term],\n    v.[accounting_date],\n    v.[tax_control_amount],\n    v.[source_transaction_reference],\n    v.[validation_status],\n    0,\n    NULL,\n    v.[validation_reason],\n    TRY_CONVERT(uniqueidentifier, ''', pipeline().parameters.p_batch_id, '''),\n    CONCAT(\n        COALESCE(v.[source], ''', pipeline().parameters.p_source_system, '''), ''|'',\n        COALESCE(v.[bu_name], ''''), ''|'',\n        COALESCE(v.[invoice_number], ''''), ''|'',\n        COALESCE(v.[supplier_number], '''')\n    ),\n    ''', pipeline().parameters.p_source_system, ''',\n    ''', pipeline().parameters.p_entity_name, ''',\n    bu.[LEDGER_ID],\n    ''Ready For Delivery'',\n    v.[liability_account]\nFROM [dbo].[vw_softco_ap_invoice_header_transformed] v\nOUTER APPLY (\n    SELECT TOP (1)\n        bd.[LEGAL_ENTITY_NAME],\n        bd.[LEDGER_ID]\n    FROM [dbo].[tbl_bu_details] bd\n    WHERE UPPER(LTRIM(RTRIM(bd.[BUSINESS_UNIT_NAME]))) = UPPER(LTRIM(RTRIM(v.[bu_name])))\n    ORDER BY bd.[LEDGER_ID], bd.[LEGAL_ENTITY_NAME], bd.[BUSINESS_UNIT_NAME]\n) bu\nWHERE ISNULL(v.[validation_status], '''') = ''Validation Success'';\n')",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "01:00:00"
+				}
+			},
+			{
+				"name": "Insert Line Staging Rows",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "Insert Header Staging Rows",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.04:00:00",
+					"retry": 1,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "@concat(\n'WITH raw_header_map AS (\n    SELECT DISTINCT\n        NULLIF(LTRIM(RTRIM(CAST(hr.[caseId] AS nvarchar(255)))), '''') AS case_id,\n        NULLIF(LTRIM(RTRIM(CAST(hr.[invoiceNumber] AS nvarchar(255)))), '''') AS invoice_number,\n        bu.[BUSINESS_UNIT_NAME] AS business_unit_name\n    FROM [dbo].[tbl_softco_ap_invoice_header_raw] hr\n    OUTER APPLY (\n        SELECT TOP (1) bd.[BUSINESS_UNIT_NAME]\n        FROM [dbo].[tbl_bu_details] bd\n        WHERE UPPER(LTRIM(RTRIM(bd.[BUSINESS_UNIT_NAME]))) = UPPER(LTRIM(RTRIM(hr.[organisation])))\n           OR UPPER(LTRIM(RTRIM(bd.[BUSINESS_UNIT_CODE]))) = UPPER(LTRIM(RTRIM(hr.[organisation])))\n        ORDER BY bd.[LEDGER_ID], bd.[BUSINESS_UNIT_NAME], bd.[BUSINESS_UNIT_CODE]\n    ) bu\n),\nline_source AS (\n    SELECT l.*, m.business_unit_name\n    FROM [dbo].[vw_softco_ap_invoice_line_transformed] l\n    LEFT JOIN raw_header_map m\n        ON m.case_id = l.case_id\n        AND m.invoice_number = l.invoice_number\n)\nINSERT INTO [dbo].[tbl_generic_ap_invoice_lines_staging] (\n    [Invoice ID],\n    [Line Number],\n    [Line Type],\n    [Amount],\n    [Description],\n    [Distribution Combination],\n    [Accounting Date],\n    [Tax Rate Code],\n    [Tax Rate],\n    [Project Number],\n    [Task Number],\n    [Expenditure Type],\n    [Contract Number],\n    [ValidationStatus],\n    [Processed_bit],\n    [processed_at],\n    [validation_reason],\n    [batchId],\n    [MetadataUniqueIdentifies],\n    [source_system],\n    [entity_name],\n    [ledger_id],\n    [invoice_status],\n    [PO Number],\n    [PO Line Number],\n    [Receipt Number]\n)\nSELECT\n    h.[Invoice ID],\n    l.[line_number],\n    l.[line_type],\n    l.[line_amount],\n    l.[line_description],\n    l.[distribution_combination],\n    l.[accounting_date],\n    l.[tax_rate_name],\n    l.[vat_percentage],\n    l.[project],\n    l.[task],\n    l.[exp_type],\n    l.[award],\n    l.[validation_status],\n    0,\n    NULL,\n    l.[validation_reason],\n    TRY_CONVERT(uniqueidentifier, ''', pipeline().parameters.p_batch_id, '''), \n    CONCAT(h.[MetadataUniqueIdentifies], ''|'', COALESCE(l.[line_number], '''')),\n    ''', pipeline().parameters.p_source_system, ''',\n    ''', pipeline().parameters.p_entity_name, ''',\n    h.[ledger_id],\n    ''Ready For Delivery'',\n    l.order_number,\n    l.order_item_number,\n    l.receipt_number\nFROM line_source l\nINNER JOIN [dbo].[tbl_generic_ap_invoice_header_staging] h\n    ON h.[batchId] = TRY_CONVERT(uniqueidentifier, ''', pipeline().parameters.p_batch_id, ''')\n    AND h.[Invoice Number] = l.[invoice_number]\n    AND ISNULL(h.[Business Unit], '''') = ISNULL(l.business_unit_name, '''')\nWHERE ISNULL(l.[validation_status], '''') = ''Validation Success'';\n')",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "01:00:00"
+				}
+			},
+			{
+				"name": "Mark Failed Invoices Before Delivery",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "Insert Line Staging Rows",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.02:00:00",
+					"retry": 1,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "@concat('WITH raw_header_map AS ( SELECT DISTINCT NULLIF(LTRIM(RTRIM(CAST(hr.[caseId] AS nvarchar(255)))), '''') AS case_id, NULLIF(LTRIM(RTRIM(CAST(hr.[invoiceNumber] AS nvarchar(255)))), '''') AS invoice_number, bu.[BUSINESS_UNIT_NAME] AS business_unit_name FROM [dbo].[tbl_softco_ap_invoice_header_raw] hr OUTER APPLY ( SELECT TOP (1) bd.[BUSINESS_UNIT_NAME] FROM [dbo].[tbl_bu_details] bd WHERE UPPER(LTRIM(RTRIM(bd.[BUSINESS_UNIT_NAME]))) = UPPER(LTRIM(RTRIM(hr.[organisation]))) OR UPPER(LTRIM(RTRIM(bd.[BUSINESS_UNIT_CODE]))) = UPPER(LTRIM(RTRIM(hr.[organisation]))) ORDER BY bd.[LEDGER_ID], bd.[BUSINESS_UNIT_NAME], bd.[BUSINESS_UNIT_CODE] ) bu ), failed_invoice AS ( SELECT DISTINCT h.[batchId], h.[Invoice ID] FROM [dbo].[tbl_generic_ap_invoice_header_staging] h INNER JOIN raw_header_map m ON ISNULL(m.[invoice_number], '''') = ISNULL(h.[Invoice Number], '''') AND ISNULL(m.[business_unit_name], '''') = ISNULL(h.[Business Unit], '''') INNER JOIN [dbo].[vw_softco_ap_invoice_line_transformed] l ON l.[case_id] = m.[case_id] AND l.[invoice_number] = m.[invoice_number] WHERE h.[batchId] = TRY_CONVERT(uniqueidentifier, ''', pipeline().parameters.p_batch_id, ''') AND ISNULL(l.[validation_status], '''') <> ''Validation Success'' ) DELETE l FROM [dbo].[tbl_generic_ap_invoice_lines_staging] l INNER JOIN failed_invoice f ON f.[batchId] = l.[batchId] AND f.[Invoice ID] = l.[Invoice ID]; WITH raw_header_map AS ( SELECT DISTINCT NULLIF(LTRIM(RTRIM(CAST(hr.[caseId] AS nvarchar(255)))), '''') AS case_id, NULLIF(LTRIM(RTRIM(CAST(hr.[invoiceNumber] AS nvarchar(255)))), '''') AS invoice_number, bu.[BUSINESS_UNIT_NAME] AS business_unit_name FROM [dbo].[tbl_softco_ap_invoice_header_raw] hr OUTER APPLY ( SELECT TOP (1) bd.[BUSINESS_UNIT_NAME] FROM [dbo].[tbl_bu_details] bd WHERE UPPER(LTRIM(RTRIM(bd.[BUSINESS_UNIT_NAME]))) = UPPER(LTRIM(RTRIM(hr.[organisation]))) OR UPPER(LTRIM(RTRIM(bd.[BUSINESS_UNIT_CODE]))) = UPPER(LTRIM(RTRIM(hr.[organisation]))) ORDER BY bd.[LEDGER_ID], bd.[BUSINESS_UNIT_NAME], bd.[BUSINESS_UNIT_CODE] ) bu ), failed_invoice AS ( SELECT DISTINCT h.[batchId], h.[Invoice ID] FROM [dbo].[tbl_generic_ap_invoice_header_staging] h INNER JOIN raw_header_map m ON ISNULL(m.[invoice_number], '''') = ISNULL(h.[Invoice Number], '''') AND ISNULL(m.[business_unit_name], '''') = ISNULL(h.[Business Unit], '''') INNER JOIN [dbo].[vw_softco_ap_invoice_line_transformed] l ON l.[case_id] = m.[case_id] AND l.[invoice_number] = m.[invoice_number] WHERE h.[batchId] = TRY_CONVERT(uniqueidentifier, ''', pipeline().parameters.p_batch_id, ''') AND ISNULL(l.[validation_status], '''') <> ''Validation Success'' ) DELETE h FROM [dbo].[tbl_generic_ap_invoice_header_staging] h INNER JOIN failed_invoice f ON f.[batchId] = h.[batchId] AND f.[Invoice ID] = h.[Invoice ID];')",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "00:30:00"
+				}
+			},
+			{
+				"name": "Create Delivery Groups",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "Mark Failed Invoices Before Delivery",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.02:00:00",
+					"retry": 1,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "@concat('MERGE [dbo].[tbl_integration_delivery_group] AS tgt USING ( SELECT [batchId] AS batch_id, [Source] AS source_system, ''', pipeline().parameters.p_entity_name, ''' AS entity_name, [Business Unit] AS business_unit_name, [ledger_id], COUNT(*) AS header_row_count FROM [dbo].[tbl_generic_ap_invoice_header_staging] WHERE [batchId] = TRY_CONVERT(uniqueidentifier, ''', pipeline().parameters.p_batch_id, ''') AND [ValidationStatus] = ''Validation Success'' GROUP BY [batchId], [Source], [Business Unit], [ledger_id] ) AS src ON tgt.[batch_id] = src.batch_id AND tgt.[source_system] = src.source_system AND tgt.[business_unit_name] = src.business_unit_name AND tgt.[ledger_id] = src.[ledger_id] WHEN MATCHED THEN UPDATE SET [header_row_count] = src.header_row_count, [group_status] = ''Ready'', [updated_at_utc] = SYSUTCDATETIME() WHEN NOT MATCHED THEN INSERT ([batch_id],[source_system],[entity_name],[business_unit_name],[ledger_id],[header_row_count],[group_status],[created_at_utc],[updated_at_utc]) VALUES (src.batch_id, src.source_system, src.entity_name, src.business_unit_name, src.ledger_id, src.header_row_count, ''Ready'', SYSUTCDATETIME(), SYSUTCDATETIME()); UPDATE dg SET [line_row_count] = ls.line_row_count, [updated_at_utc] = SYSUTCDATETIME() FROM [dbo].[tbl_integration_delivery_group] dg INNER JOIN ( SELECT h.[batchId] AS batch_id, h.[Source] AS source_system, h.[Business Unit] AS business_unit_name, h.[ledger_id], COUNT(*) AS line_row_count FROM [dbo].[tbl_generic_ap_invoice_lines_staging] l INNER JOIN [dbo].[tbl_generic_ap_invoice_header_staging] h ON h.[Invoice ID] = l.[Invoice ID] AND h.[batchId] = l.[batchId] WHERE h.[batchId] = TRY_CONVERT(uniqueidentifier, ''', pipeline().parameters.p_batch_id, ''') AND l.[ValidationStatus] = ''Validation Success'' GROUP BY h.[batchId], h.[Source], h.[Business Unit], h.[ledger_id] ) ls ON dg.[batch_id] = ls.batch_id AND dg.[source_system] = ls.source_system AND dg.[business_unit_name] = ls.business_unit_name AND dg.[ledger_id] = ls.[ledger_id]; UPDATE h SET [delivery_group_id] = dg.[delivery_group_id] FROM [dbo].[tbl_generic_ap_invoice_header_staging] h INNER JOIN [dbo].[tbl_integration_delivery_group] dg ON dg.[batch_id] = h.[batchId] AND dg.[source_system] = h.[Source] AND dg.[business_unit_name] = h.[Business Unit] AND dg.[ledger_id] = h.[ledger_id] WHERE h.[batchId] = TRY_CONVERT(uniqueidentifier, ''', pipeline().parameters.p_batch_id, '''); UPDATE l SET [delivery_group_id] = h.[delivery_group_id], [ledger_id] = h.[ledger_id] FROM [dbo].[tbl_generic_ap_invoice_lines_staging] l INNER JOIN [dbo].[tbl_generic_ap_invoice_header_staging] h ON h.[Invoice ID] = l.[Invoice ID] AND h.[batchId] = l.[batchId] WHERE l.[batchId] = TRY_CONVERT(uniqueidentifier, ''', pipeline().parameters.p_batch_id, ''');')",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "01:00:00"
+				}
+			},
+			{
+				"name": "Seed Invoice Status",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "Create Delivery Groups",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.02:00:00",
+					"retry": 1,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "@concat('MERGE [dbo].[tbl_integration_document_status] AS tgt USING ( SELECT [batch_id],[delivery_group_id],[source_system],[entity_name],[business_unit_name],[ledger_id],[staging_record_id],[document_number],[counterparty_reference],[metadata_unique_identifier],[document_status],[status_message] FROM ( SELECT h.[batchId] AS batch_id, h.[delivery_group_id], h.[source_system], h.[entity_name], h.[Business Unit] AS business_unit_name, h.[ledger_id], h.[Invoice ID] AS staging_record_id, h.[Invoice Number] AS document_number, h.[Supplier Number] AS counterparty_reference, h.[MetadataUniqueIdentifies] AS metadata_unique_identifier, ''Ready For Delivery'' AS document_status, h.[validation_reason] AS status_message, ROW_NUMBER() OVER ( PARTITION BY h.[batchId], h.[source_system], h.[entity_name], h.[Invoice Number], h.[MetadataUniqueIdentifies] ORDER BY h.[Invoice ID] DESC ) AS row_priority FROM [dbo].[tbl_generic_ap_invoice_header_staging] h WHERE h.[batchId] = TRY_CONVERT(uniqueidentifier, ''', pipeline().parameters.p_batch_id, ''') ) seeded_source WHERE [row_priority] = 1 ) AS src ON tgt.[batch_id] = src.[batch_id] AND tgt.[source_system] = src.[source_system] AND tgt.[entity_name] = src.[entity_name] AND tgt.[document_number] = src.[document_number] AND ISNULL(tgt.[metadata_unique_identifier], '''') = ISNULL(src.[metadata_unique_identifier], '''') WHEN MATCHED THEN UPDATE SET [delivery_group_id] = src.[delivery_group_id], [business_unit_name] = src.[business_unit_name], [ledger_id] = src.[ledger_id], [staging_record_id] = src.[staging_record_id], [counterparty_reference] = src.[counterparty_reference], [document_status] = src.[document_status], [status_message] = src.[status_message], [last_updated_at_utc] = SYSUTCDATETIME() WHEN NOT MATCHED THEN INSERT ([batch_id],[delivery_group_id],[source_system],[entity_name],[business_unit_name],[ledger_id],[staging_record_id],[document_number],[counterparty_reference],[metadata_unique_identifier],[document_status],[status_message],[first_seen_at_utc],[last_updated_at_utc]) VALUES (src.[batch_id], src.[delivery_group_id], src.[source_system], src.[entity_name], src.[business_unit_name], src.[ledger_id], src.[staging_record_id], src.[document_number], src.[counterparty_reference], src.[metadata_unique_identifier], src.[document_status], src.[status_message], SYSUTCDATETIME(), SYSUTCDATETIME());')",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "00:30:00"
+				}
+			},
+			{
+				"name": "Insert Validation Source Notifications",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "Seed Invoice Status",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.02:00:00",
+					"retry": 1,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "@concat('WITH line_failures AS ( SELECT TRY_CONVERT(uniqueidentifier, ''', pipeline().parameters.p_batch_id, ''') AS [batch_id], CAST(NULL AS bigint) AS [delivery_group_id], ''', pipeline().parameters.p_entity_name, ''' AS [entity_name], l.[invoice_number] AS [document_number], hv.[supplier_number] AS [counterparty_reference], ''', pipeline().parameters.p_source_system, ''' AS [source_name], ''VALIDATION'' AS [process_stage], ''FAILED'' AS [execution_status], ''VALIDATION_ERROR'' AS [reason_code], LEFT(STRING_AGG(l.[validation_reason], '' ; ''), 1000) AS [reason_message] FROM ( SELECT DISTINCT l.[case_id], l.[invoice_number], CAST(l.[validation_reason] AS nvarchar(max)) AS [validation_reason] FROM [dbo].[vw_softco_ap_invoice_line_transformed] l WHERE ISNULL(l.[validation_status], '''') <> ''Validation Success'' AND NULLIF(LTRIM(RTRIM(CAST(l.[validation_reason] AS nvarchar(max)))), '''') IS NOT NULL ) l LEFT JOIN [dbo].[vw_softco_ap_invoice_header_transformed] hv ON hv.[case_id] = l.[case_id] AND hv.[invoice_number] = l.[invoice_number] GROUP BY l.[invoice_number], hv.[supplier_number] ), header_only_failures AS ( SELECT TRY_CONVERT(uniqueidentifier, ''', pipeline().parameters.p_batch_id, ''') AS [batch_id], CAST(NULL AS bigint) AS [delivery_group_id], ''', pipeline().parameters.p_entity_name, ''' AS [entity_name], hv.[invoice_number] AS [document_number], hv.[supplier_number] AS [counterparty_reference], ''', pipeline().parameters.p_source_system, ''' AS [source_name], ''VALIDATION'' AS [process_stage], ''FAILED'' AS [execution_status], ''VALIDATION_ERROR'' AS [reason_code], LEFT(CAST(hv.[validation_reason] AS nvarchar(max)), 1000) AS [reason_message] FROM [dbo].[vw_softco_ap_invoice_header_transformed] hv WHERE ISNULL(hv.[validation_status], '''') <> ''Validation Success'' AND NULLIF(LTRIM(RTRIM(CAST(hv.[validation_reason] AS nvarchar(max)))), '''') IS NOT NULL AND NOT EXISTS ( SELECT 1 FROM [dbo].[vw_softco_ap_invoice_line_transformed] l WHERE l.[case_id] = hv.[case_id] AND l.[invoice_number] = hv.[invoice_number] ) ) MERGE [dbo].[tbl_source_notification_table] AS tgt USING ( SELECT * FROM line_failures UNION ALL SELECT * FROM header_only_failures ) AS src ON tgt.[batch_id] = src.[batch_id] AND tgt.[process_stage] = src.[process_stage] AND ISNULL(tgt.[document_number], '''') = ISNULL(src.[document_number], '''') AND ISNULL(tgt.[counterparty_reference], '''') = ISNULL(src.[counterparty_reference], '''') WHEN MATCHED THEN UPDATE SET [delivery_group_id] = src.[delivery_group_id], [entity_name] = src.[entity_name], [source_name] = src.[source_name], [execution_status] = src.[execution_status], [reason_code] = src.[reason_code], [reason_message] = src.[reason_message], [updated_at] = SYSUTCDATETIME() WHEN NOT MATCHED THEN INSERT ([batch_id], [delivery_group_id], [entity_name], [document_number], [counterparty_reference], [source_name], [process_stage], [execution_status], [reason_code], [reason_message], [created_at], [updated_at]) VALUES (src.[batch_id], src.[delivery_group_id], src.[entity_name], src.[document_number], src.[counterparty_reference], src.[source_name], src.[process_stage], src.[execution_status], src.[reason_code], src.[reason_message], SYSUTCDATETIME(), SYSUTCDATETIME());')",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "00:30:00"
+				}
+			},
+			{
+				"name": "Update Batch Counts",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "Insert Validation Source Notifications",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.01:00:00",
+					"retry": 1,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "@concat('UPDATE [dbo].[tbl_integration_batch] SET [batch_status] = ''Staged'', [current_stage] = ''Delivery Groups Prepared'', [header_staging_count] = (SELECT COUNT(*) FROM [dbo].[tbl_generic_ap_invoice_header_staging] WHERE [batchId] = TRY_CONVERT(uniqueidentifier, ''', pipeline().parameters.p_batch_id, ''')), [line_staging_count] = (SELECT COUNT(*) FROM [dbo].[tbl_generic_ap_invoice_lines_staging] WHERE [batchId] = TRY_CONVERT(uniqueidentifier, ''', pipeline().parameters.p_batch_id, ''')), [validation_failed_count] = (SELECT COUNT(*) FROM [dbo].[tbl_source_notification_table] WHERE [batch_id] = TRY_CONVERT(uniqueidentifier, ''', pipeline().parameters.p_batch_id, ''') AND [process_stage] = ''VALIDATION'' AND [execution_status] = ''FAILED''), [updated_at_utc] = SYSUTCDATETIME() WHERE [batch_id] = TRY_CONVERT(uniqueidentifier, ''', pipeline().parameters.p_batch_id, ''');')",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "00:30:00"
+				}
+			}
+		],
+		"parameters": {
+			"p_batch_id": {
+				"type": "String"
+			},
+			"p_source_system": {
+				"type": "String",
+				"defaultValue": "SoftCo"
+			},
+			"p_entity_name": {
+				"type": "String",
+				"defaultValue": "AP Invoice"
+			}
+		},
+		"folder": {
+			"name": "df_softco_to_fusion_ap_invoice_inbound_integration (IN-04)/stage1 - to be triggered every 30 mins"
+		},
+		"annotations": [],
+		"lastPublishTime": "2026-03-30T13:44:00Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

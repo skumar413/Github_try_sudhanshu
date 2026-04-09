@@ -1,0 +1,1449 @@
+{
+	"name": "v1_new_df_load_and_import_softco_ap_invoices",
+	"properties": {
+		"activities": [
+			{
+				"name": "Set Pipeline Start Time",
+				"type": "SetVariable",
+				"dependsOn": [],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "pipeline_start_utc",
+					"value": {
+						"value": "@utcNow()",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Check Invoices Rows",
+				"type": "Script",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.04:00:00",
+					"retry": 2,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "Query",
+							"text": "SELECT COUNT(*) AS INVOICE_COUNT FROM [dbo].[tb_generic_ap_invoice_header_staging] WHERE ISNULL(processed_bit, 0) = 0"
+						}
+					],
+					"scriptBlockExecutionTimeout": "01:00:00"
+				}
+			},
+			{
+				"name": "Check Invoice Lines Rows",
+				"type": "Script",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.04:00:00",
+					"retry": 2,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "Query",
+							"text": "SELECT COUNT(*) AS LINE_COUNT FROM [dbo].[tb_generic_ap_invoice_lines_staging] WHERE ISNULL(processed_bit, 0) = 0"
+						}
+					],
+					"scriptBlockExecutionTimeout": "01:00:00"
+				}
+			},
+			{
+				"name": "Log Check Invoices Failure",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "Check Invoices Rows",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.01:00:00",
+					"retry": 1,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "@concat('INSERT INTO [dbo].[tb_integration_transaction_log] ([pipeline_name],[pipeline_run_id],[activity_name],[activity_type],[step_name],[execution_status],[severity],[source_system],[target_system],[entity_name],[correlation_id],[transaction_id],[message],[error_code],[error_message],[start_time_utc],[end_time_utc],[created_by],[created_at_utc],[status],[success_flag],[created_at],[updated_at]) VALUES (''', pipeline().Pipeline, ''',''', pipeline().RunId, ''',''Check Invoices Rows'',''Script'',''Precheck'',''Failed'',''Error'',''UIS SQL'',''Fusion AP'',''SoftCo AP Invoice'',''', pipeline().RunId, ''',''', pipeline().RunId, ''',''Failed to count invoice header staging rows.'',''', replace(string(activity('Check Invoices Rows').error.code), '''', ''''''), ''',''', replace(string(activity('Check Invoices Rows').error.message), '''', ''''''), ''', TRY_CAST(''', variables('pipeline_start_utc'), ''' AS datetime2), SYSUTCDATETIME(), ''ADF'', SYSUTCDATETIME(), ''failed'', 0, SYSUTCDATETIME(), SYSUTCDATETIME())')",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "00:30:00"
+				}
+			},
+			{
+				"name": "Fail Check Invoices",
+				"type": "Fail",
+				"dependsOn": [
+					{
+						"activity": "Check Invoices Rows",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"message": "Failed to count invoice header staging rows.",
+					"errorCode": "ADF_SOFTCO_AP_PRECHECK_HEADERS"
+				}
+			},
+			{
+				"name": "Log Check Invoice Lines Failure",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "Check Invoice Lines Rows",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.01:00:00",
+					"retry": 1,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "@concat('INSERT INTO [dbo].[tb_integration_transaction_log] ([pipeline_name],[pipeline_run_id],[activity_name],[activity_type],[step_name],[execution_status],[severity],[source_system],[target_system],[entity_name],[correlation_id],[transaction_id],[message],[error_code],[error_message],[start_time_utc],[end_time_utc],[created_by],[created_at_utc],[status],[success_flag],[created_at],[updated_at]) VALUES (''', pipeline().Pipeline, ''',''', pipeline().RunId, ''',''Check Invoice Lines Rows'',''Script'',''Precheck'',''Failed'',''Error'',''UIS SQL'',''Fusion AP'',''SoftCo AP Invoice'',''', pipeline().RunId, ''',''', pipeline().RunId, ''',''Failed to count invoice line staging rows.'',''', replace(string(activity('Check Invoice Lines Rows').error.code), '''', ''''''), ''',''', replace(string(activity('Check Invoice Lines Rows').error.message), '''', ''''''), ''', TRY_CAST(''', variables('pipeline_start_utc'), ''' AS datetime2), SYSUTCDATETIME(), ''ADF'', SYSUTCDATETIME(), ''failed'', 0, SYSUTCDATETIME(), SYSUTCDATETIME())')",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "00:30:00"
+				}
+			},
+			{
+				"name": "Fail Check Invoice Lines",
+				"type": "Fail",
+				"dependsOn": [
+					{
+						"activity": "Check Invoice Lines Rows",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"message": "Failed to count invoice line staging rows.",
+					"errorCode": "ADF_SOFTCO_AP_PRECHECK_LINES"
+				}
+			},
+			{
+				"name": "Logging Start",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "Set Pipeline Start Time",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Check Invoices Rows",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Check Invoice Lines Rows",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.01:00:00",
+					"retry": 1,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "@concat('INSERT INTO [dbo].[tb_integration_transaction_log] ([pipeline_name],[pipeline_run_id],[activity_name],[activity_type],[step_name],[execution_status],[severity],[source_system],[target_system],[entity_name],[object_name],[correlation_id],[transaction_id],[message],[start_time_utc],[created_by],[created_at_utc],[status],[created_at],[updated_at]) VALUES (''', pipeline().Pipeline, ''',''', pipeline().RunId, ''',''Logging Start'',''Script'',''Pipeline Start'',''Started'',''Info'',''UIS SQL'',''Fusion AP'',''SoftCo AP Invoice'',''tb_generic_ap_invoice_header_staging / tb_generic_ap_invoice_lines_staging'',''', pipeline().RunId, ''',''', pipeline().RunId, ''',''Pipeline started. Header rows: ', string(activity('Check Invoices Rows').output.resultSets[0].rows[0].INVOICE_COUNT), '; line rows: ', string(activity('Check Invoice Lines Rows').output.resultSets[0].rows[0].LINE_COUNT), ''', TRY_CAST(''', variables('pipeline_start_utc'), ''' AS datetime2), ''ADF'', SYSUTCDATETIME(), ''in-progress'', SYSUTCDATETIME(), SYSUTCDATETIME())')",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "00:30:00"
+				}
+			},
+			{
+				"name": "If Condition",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "Set Pipeline Start Time",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Check Invoices Rows",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Check Invoice Lines Rows",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@and(greater(int(activity('Check Invoices Rows').output.resultSets[0].rows[0].INVOICE_COUNT), 0), greater(int(activity('Check Invoice Lines Rows').output.resultSets[0].rows[0].LINE_COUNT), 0))",
+						"type": "Expression"
+					},
+					"ifFalseActivities": [
+						{
+							"name": "Log Nothing to Process",
+							"type": "Script",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.01:00:00",
+								"retry": 1,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"linkedServiceName": {
+								"referenceName": "uis_df_sql_linked_service",
+								"type": "LinkedServiceReference"
+							},
+							"typeProperties": {
+								"scripts": [
+									{
+										"type": "NonQuery",
+										"text": {
+											"value": "@concat('INSERT INTO [dbo].[tb_integration_transaction_log] ([pipeline_name],[pipeline_run_id],[activity_name],[activity_type],[step_name],[execution_status],[severity],[source_system],[target_system],[entity_name],[correlation_id],[transaction_id],[message],[start_time_utc],[end_time_utc],[created_by],[created_at_utc],[status],[success_flag],[created_at],[updated_at]) VALUES (''', pipeline().Pipeline, ''',''', pipeline().RunId, ''',''If Condition'',''IfCondition'',''No Work'',''Succeeded'',''Info'',''UIS SQL'',''Fusion AP'',''SoftCo AP Invoice'',''', pipeline().RunId, ''',''', pipeline().RunId, ''',''No work found. Header rows: ', string(activity('Check Invoices Rows').output.resultSets[0].rows[0].INVOICE_COUNT), '; line rows: ', string(activity('Check Invoice Lines Rows').output.resultSets[0].rows[0].LINE_COUNT), ''', TRY_CAST(''', variables('pipeline_start_utc'), ''' AS datetime2), SYSUTCDATETIME(), ''ADF'', SYSUTCDATETIME(), ''no-data'', 1, SYSUTCDATETIME(), SYSUTCDATETIME())')",
+											"type": "Expression"
+										}
+									}
+								],
+								"scriptBlockExecutionTimeout": "00:30:00"
+							}
+						},
+						{
+							"name": "Nothing to Process - End Pipeline",
+							"type": "Wait",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"waitTimeInSeconds": 1
+							}
+						}
+					],
+					"ifTrueActivities": [
+						{
+							"name": "Invoices_sql_to_csv",
+							"type": "Copy",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 2,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "AzureSqlSource",
+									"sqlReaderQuery": "SELECT [Invoice ID],[Business Unit],[Source],[Invoice Number],[Invoice Amount],[Invoice Date],[Supplier Name],[Supplier Number],[Supplier Site],[Invoice Currency],[Payment Currency],[Description],[Import Set],[Invoice Type],[Legal Entity],[Customer Tax Registration Number],[Customer Registration Code],[First-Party Tax Registration Number],[Supplier Tax Registration Code],[Payment Terms],[Terms Date],[Goods Received Date],[Invoice Received Date],[Accounting Date],[Payment Method],[Pay Group],[Pay Alone],[Discountable Amount],[Prepayment Number],[Prepayment Line Number],[Prepayment Application Amount],[Prepayment Accounting Date],[Invoice Includes Prepayment],[Conversion Rate Type],[Conversion Date],[Conversion Rate],[Liability Combination],[Document Category Code],[Voucher Number],[Requester First Name],[Requester Last Name],[Requester Employee Number],[Delivery Channel Code],[Bank Charge Bearer],[Remit-to Supplier],[Remit-to Supplier Number],[Remit-to Address Name],[Payment Priority],[Settlement Priority],[Unique Remittance Identifier],[Unique Remittance Identifier Check Digit],[Payment Reason Code],[Payment Reason Comments],[Remittance Message 1],[Remittance Message 2],[Remittance Message 3],[Withholding Tax Group],[Ship-to Location],[Taxation Country],[Document Sub Type],[Tax Invoice Internal Sequence Number],[Supplier Tax Invoice Number],[Tax Invoice Recording Date],[Supplier Tax Invoice Date],[Supplier Tax Invoice Conversion Rate],[Port Of Entry Code],[Correction Year],[Correction Period],[Import Document Number],[Import Document Date],[Tax Control Amount],[Calculate Tax During Import],[Add Tax To Invoice Amount],[Attribute Category],[Attribute 1],[Attribute 2],[Attribute 3],[Attribute 4],[Attribute 5],[Attribute 6],[Attribute 7],[Attribute 8],[Attribute 9],[Attribute 10],[Attribute 11],[Attribute 12],[Attribute 13],[Attribute 14],[Attribute 15],[Attribute Number 1],[Attribute Number 2],[Attribute Number 3],[Attribute Number 4],[Attribute Number 5],[Attribute Date 1],[Attribute Date 2],[Attribute Date 3],[Attribute Date 4],[Attribute Date 5],[Global Attribute Category],[Global Attribute 1],[Global Attribute 2],[Global Attribute 3],[Global Attribute 4],[Global Attribute 5],[Global Attribute 6],[Global Attribute 7],[Global Attribute 8],[Global Attribute 9],[Global Attribute 10],[Global Attribute 11],[Global Attribute 12],[Global Attribute 13],[Global Attribute 14],[Global Attribute 15],[Global Attribute 16],[Global Attribute 17],[Global Attribute 18],[Global Attribute 19],[Global Attribute 20],[Global Attribute Number 1],[Global Attribute Number 2],[Global Attribute Number 3],[Global Attribute Number 4],[Global Attribute Number 5],[Global Attribute Date 1],[Global Attribute Date 2],[Global Attribute Date 3],[Global Attribute Date 4],[Global Attribute Date 5],[URL Attachments],'END' AS ENDROW FROM [dbo].[tb_generic_ap_invoice_header_staging] WHERE ISNULL(processed_bit, 0) = 0",
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"sink": {
+									"type": "DelimitedTextSink",
+									"storeSettings": {
+										"type": "AzureBlobStorageWriteSettings"
+									},
+									"formatSettings": {
+										"type": "DelimitedTextWriteSettings",
+										"quoteAllText": true,
+										"fileExtension": ".txt"
+									}
+								},
+								"enableStaging": false
+							},
+							"inputs": [
+								{
+									"referenceName": "df_camsis_ap_invoices_raw_table_dataset",
+									"type": "DatasetReference",
+									"parameters": {
+										"table_name": "*"
+									}
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "df_softco_ap_invoice_csv_dataset",
+									"type": "DatasetReference",
+									"parameters": {
+										"folder_name": "csv",
+										"file_name": "ApInvoicesInterface.csv"
+									}
+								}
+							]
+						},
+						{
+							"name": "InvoiceLines_sql_to_csv",
+							"type": "Copy",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 2,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "AzureSqlSource",
+									"sqlReaderQuery": "SELECT [Invoice ID],[Line Number],[Line Type],[Amount],[Invoice Quantity],[Unit Price],[UOM],[Description],[PO Number],[PO Line Number],[PO Schedule Number],[PO Distribution Number],[Item Description],[PO Release Number],[Purchasing Category],[Receipt Number],[Receipt Line Number],[Consumption Advice Number],[Consumption Advice Line Number],[Packing Slip],[Final Match],[Distribution Combination],[Distribution Set],[Accounting Date],[Overlay Account Segment],[Overlay Primary Balancing Segment],[Overlay Cost Center Segment],[Tax Classification Code],[Ship-to Location],[Ship-from Location],[Location of Final Discharge],[Transaction Business Category],[Product Fiscal Classification],[Intended Use],[User-Defined Fiscal Classification],[Product Type],[Assessable Value],[Product Category],[Tax Control Amount],[Tax Regime Code],[Tax],[Tax Status Code],[Tax Jurisdiction Code],[Tax Rate Code],[Tax Rate],[Withholding Tax Group],[Income Tax Type],[Income Tax Region],[Prorate Across All Item Lines],[Line Group Number],[Cost Factor Name],[Statistical Quantity],[Track as Asset],[Asset Book Type Code],[Asset Category ID],[Serial Number],[Manufacturer],[Model Number],[Warranty Number],[Price Correction Line],[Price Correction Invoice Number],[Price Correction Invoice Line Number],[Requester First Name],[Requester Last Name],[Requester Employee Number],[Attribute Category],[Attribute 1],[Attribute 2],[Attribute 3],[Attribute 4],[Attribute 5],[Attribute 6],[Attribute 7],[Attribute 8],[Attribute 9],[Attribute 10],[Attribute 11],[Attribute 12],[Attribute 13],[Attribute 14],[Attribute 15],[Attribute Number 1],[Attribute Number 2],[Attribute Number 3],[Attribute Number 4],[Attribute Number 5],[Attribute Date 1],[Attribute Date 2],[Attribute Date 3],[Attribute Date 4],[Attribute Date 5],[Global Attribute Category],[Global Attribute 1],[Global Attribute 2],[Global Attribute 3],[Global Attribute 4],[Global Attribute 5],[Global Attribute 6],[Global Attribute 7],[Global Attribute 8],[Global Attribute 9],[Global Attribute 10],[Global Attribute 11],[Global Attribute 12],[Global Attribute 13],[Global Attribute 14],[Global Attribute 15],[Global Attribute 16],[Global Attribute 17],[Global Attribute 18],[Global Attribute 19],[Global Attribute 20],[Global Attribute Number 1],[Global Attribute Number 2],[Global Attribute Number 3],[Global Attribute Number 4],[Global Attribute Number 5],[Global Attribute Date 1],[Global Attribute Date 2],[Global Attribute Date 3],[Global Attribute Date 4],[Global Attribute Date 5],[Project ID],[Task ID],[Expenditure Type ID],[Expenditure Item Date],[Expenditure Organization ID],[Project Number],[Task Number],[Expenditure Type],[Expenditure Organization],[Funding Source Id],[PJC Reserved Attribute 2],[PJC Reserved Attribute 3],[PJC Reserved Attribute 4],[PJC Reserved Attribute 5],[PJC Reserved Attribute 6],[PJC Reserved Attribute 7],[PJC Reserved Attribute 8],[PJC Reserved Attribute 9],[PJC Reserved Attribute 10],[PJC User Defined Attribute 1],[PJC User Defined Attribute 2],[PJC User Defined Attribute 3],[PJC User Defined Attribute 4],[PJC User Defined Attribute 5],[PJC User Defined Attribute 6],[PJC User Defined Attribute 7],[PJC User Defined Attribute 8],[PJC User Defined Attribute 9],[PJC User Defined Attribute 10],[Fiscal Charge Type],[Multiperiod Accounting Start Date],[Multiperiod Accounting End Date],[Multiperiod Accounting Accrual Account],[Project Name],[Task Name],[Work Type],[Contract Name],[Contract Number],[Funding Source Name],[Funding Source Number],[Requester Email Address],[RCV Transaction Id],'END' AS ENDROW FROM [dbo].[tb_generic_ap_invoice_lines_staging] WHERE ISNULL(processed_bit, 0) = 0",
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"sink": {
+									"type": "DelimitedTextSink",
+									"storeSettings": {
+										"type": "AzureBlobStorageWriteSettings"
+									},
+									"formatSettings": {
+										"type": "DelimitedTextWriteSettings",
+										"quoteAllText": true,
+										"fileExtension": ".txt"
+									}
+								},
+								"enableStaging": false
+							},
+							"inputs": [
+								{
+									"referenceName": "df_camsis_ap_invoices_raw_table_dataset",
+									"type": "DatasetReference",
+									"parameters": {
+										"table_name": "*"
+									}
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "df_softco_ap_invoice_csv_dataset",
+									"type": "DatasetReference",
+									"parameters": {
+										"folder_name": "csv",
+										"file_name": "ApInvoiceLinesInterface.csv"
+									}
+								}
+							]
+						},
+						{
+							"name": "Log Invoice Copy Failure",
+							"type": "Script",
+							"dependsOn": [
+								{
+									"activity": "Invoices_sql_to_csv",
+									"dependencyConditions": [
+										"Failed"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.01:00:00",
+								"retry": 1,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"linkedServiceName": {
+								"referenceName": "uis_df_sql_linked_service",
+								"type": "LinkedServiceReference"
+							},
+							"typeProperties": {
+								"scripts": [
+									{
+										"type": "NonQuery",
+										"text": {
+											"value": "@concat('INSERT INTO [dbo].[tb_integration_transaction_log] ([pipeline_name],[pipeline_run_id],[activity_name],[activity_type],[step_name],[execution_status],[severity],[source_system],[target_system],[entity_name],[correlation_id],[transaction_id],[message],[error_code],[error_message],[start_time_utc],[end_time_utc],[created_by],[created_at_utc],[status],[success_flag],[created_at],[updated_at]) VALUES (''', pipeline().Pipeline, ''',''', pipeline().RunId, ''',''Invoices_sql_to_csv'',''Copy'',''Extract Invoice Headers'',''Failed'',''Error'',''UIS SQL'',''Blob Storage'',''SoftCo AP Invoice'',''', pipeline().RunId, ''',''', pipeline().RunId, ''',''Failed to write invoice header extract file.'',''', replace(string(activity('Invoices_sql_to_csv').error.code), '''', ''''''), ''',''', replace(string(activity('Invoices_sql_to_csv').error.message), '''', ''''''), ''', TRY_CAST(''', variables('pipeline_start_utc'), ''' AS datetime2), SYSUTCDATETIME(), ''ADF'', SYSUTCDATETIME(), ''failed'', 0, SYSUTCDATETIME(), SYSUTCDATETIME())')",
+											"type": "Expression"
+										}
+									}
+								],
+								"scriptBlockExecutionTimeout": "00:30:00"
+							}
+						},
+						{
+							"name": "Fail Invoice Copy",
+							"type": "Fail",
+							"dependsOn": [
+								{
+									"activity": "Invoices_sql_to_csv",
+									"dependencyConditions": [
+										"Failed"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"message": "Invoice header extract failed.",
+								"errorCode": "ADF_SOFTCO_AP_COPY_HEADERS"
+							}
+						},
+						{
+							"name": "Log Invoice Lines Copy Failure",
+							"type": "Script",
+							"dependsOn": [
+								{
+									"activity": "InvoiceLines_sql_to_csv",
+									"dependencyConditions": [
+										"Failed"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.01:00:00",
+								"retry": 1,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"linkedServiceName": {
+								"referenceName": "uis_df_sql_linked_service",
+								"type": "LinkedServiceReference"
+							},
+							"typeProperties": {
+								"scripts": [
+									{
+										"type": "NonQuery",
+										"text": {
+											"value": "@concat('INSERT INTO [dbo].[tb_integration_transaction_log] ([pipeline_name],[pipeline_run_id],[activity_name],[activity_type],[step_name],[execution_status],[severity],[source_system],[target_system],[entity_name],[correlation_id],[transaction_id],[message],[error_code],[error_message],[start_time_utc],[end_time_utc],[created_by],[created_at_utc],[status],[success_flag],[created_at],[updated_at]) VALUES (''', pipeline().Pipeline, ''',''', pipeline().RunId, ''',''InvoiceLines_sql_to_csv'',''Copy'',''Extract Invoice Lines'',''Failed'',''Error'',''UIS SQL'',''Blob Storage'',''SoftCo AP Invoice'',''', pipeline().RunId, ''',''', pipeline().RunId, ''',''Failed to write invoice line extract file.'',''', replace(string(activity('InvoiceLines_sql_to_csv').error.code), '''', ''''''), ''',''', replace(string(activity('InvoiceLines_sql_to_csv').error.message), '''', ''''''), ''', TRY_CAST(''', variables('pipeline_start_utc'), ''' AS datetime2), SYSUTCDATETIME(), ''ADF'', SYSUTCDATETIME(), ''failed'', 0, SYSUTCDATETIME(), SYSUTCDATETIME())')",
+											"type": "Expression"
+										}
+									}
+								],
+								"scriptBlockExecutionTimeout": "00:30:00"
+							}
+						},
+						{
+							"name": "Fail Invoice Lines Copy",
+							"type": "Fail",
+							"dependsOn": [
+								{
+									"activity": "InvoiceLines_sql_to_csv",
+									"dependencyConditions": [
+										"Failed"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"message": "Invoice line extract failed.",
+								"errorCode": "ADF_SOFTCO_AP_COPY_LINES"
+							}
+						},
+						{
+							"name": "zip_both_csv",
+							"type": "AzureFunctionActivity",
+							"dependsOn": [
+								{
+									"activity": "Invoices_sql_to_csv",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								},
+								{
+									"activity": "InvoiceLines_sql_to_csv",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.04:00:00",
+								"retry": 2,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"functionName": "zip",
+								"body": {
+									"value": "{\n  \"source_paths\": [\"softco-to-fusion/csv/ApInvoicesInterface.csv\",\"softco-to-fusion/csv/ApInvoiceLinesInterface.csv\"],\n  \"target_path\": \"@{concat('softco-to-fusion/zip/', formatDateTime(utcNow(), 'yyyyMMdd'), '/softco_', formatDateTime(utcNow(), 'yyyyMMddHHmmss'), '.zip')}\"\n}",
+									"type": "Expression"
+								},
+								"method": "POST"
+							},
+							"linkedServiceName": {
+								"referenceName": "uis_shared_process_function",
+								"type": "LinkedServiceReference"
+							}
+						},
+						{
+							"name": "Log Zip Failure",
+							"type": "Script",
+							"dependsOn": [
+								{
+									"activity": "zip_both_csv",
+									"dependencyConditions": [
+										"Failed"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.01:00:00",
+								"retry": 1,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"linkedServiceName": {
+								"referenceName": "uis_df_sql_linked_service",
+								"type": "LinkedServiceReference"
+							},
+							"typeProperties": {
+								"scripts": [
+									{
+										"type": "NonQuery",
+										"text": {
+											"value": "@concat('INSERT INTO [dbo].[tb_integration_transaction_log] ([pipeline_name],[pipeline_run_id],[activity_name],[activity_type],[step_name],[execution_status],[severity],[source_system],[target_system],[entity_name],[correlation_id],[transaction_id],[message],[error_code],[error_message],[start_time_utc],[end_time_utc],[created_by],[created_at_utc],[status],[success_flag],[created_at],[updated_at]) VALUES (''', pipeline().Pipeline, ''',''', pipeline().RunId, ''',''zip_both_csv'',''AzureFunctionActivity'',''Zip Extract Files'',''Failed'',''Error'',''Blob Storage'',''Blob Storage'',''SoftCo AP Invoice'',''', pipeline().RunId, ''',''', pipeline().RunId, ''',''Failed to zip invoice extract files.'',''', replace(string(activity('zip_both_csv').error.code), '''', ''''''), ''',''', replace(string(activity('zip_both_csv').error.message), '''', ''''''), ''', TRY_CAST(''', variables('pipeline_start_utc'), ''' AS datetime2), SYSUTCDATETIME(), ''ADF'', SYSUTCDATETIME(), ''failed'', 0, SYSUTCDATETIME(), SYSUTCDATETIME())')",
+											"type": "Expression"
+										}
+									}
+								],
+								"scriptBlockExecutionTimeout": "00:30:00"
+							}
+						},
+						{
+							"name": "Fail Zip",
+							"type": "Fail",
+							"dependsOn": [
+								{
+									"activity": "zip_both_csv",
+									"dependencyConditions": [
+										"Failed"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"message": "Zip creation failed.",
+								"errorCode": "ADF_SOFTCO_AP_ZIP"
+							}
+						},
+						{
+							"name": "File name",
+							"type": "SetVariable",
+							"dependsOn": [
+								{
+									"activity": "zip_both_csv",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "file_name",
+								"value": {
+									"value": "@activity('zip_both_csv').output.data.zip_file",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "Zip Success Log",
+							"type": "Script",
+							"dependsOn": [
+								{
+									"activity": "File name",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.01:00:00",
+								"retry": 1,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"linkedServiceName": {
+								"referenceName": "uis_df_sql_linked_service",
+								"type": "LinkedServiceReference"
+							},
+							"typeProperties": {
+								"scripts": [
+									{
+										"type": "NonQuery",
+										"text": {
+											"value": "@concat('INSERT INTO [dbo].[tb_integration_transaction_log] ([pipeline_name],[pipeline_run_id],[activity_name],[activity_type],[step_name],[execution_status],[severity],[source_system],[target_system],[entity_name],[correlation_id],[transaction_id],[file_name],[rows_read],[rows_written],[message],[start_time_utc],[end_time_utc],[created_by],[created_at_utc],[status],[success_flag],[created_at],[updated_at]) VALUES (''', pipeline().Pipeline, ''',''', pipeline().RunId, ''',''zip_both_csv'',''AzureFunctionActivity'',''Zip Extract Files'',''Succeeded'',''Info'',''Blob Storage'',''Blob Storage'',''SoftCo AP Invoice'',''', pipeline().RunId, ''',''', pipeline().RunId, ''',''', replace(string(variables('file_name')), '''', ''''''), ''',', string(add(int(activity('Invoices_sql_to_csv').output.rowsRead), int(activity('InvoiceLines_sql_to_csv').output.rowsRead))), ',', string(add(int(activity('Invoices_sql_to_csv').output.rowsCopied), int(activity('InvoiceLines_sql_to_csv').output.rowsCopied))), ',''Created zip package for downstream upload.'', TRY_CAST(''', variables('pipeline_start_utc'), ''' AS datetime2), SYSUTCDATETIME(), ''ADF'', SYSUTCDATETIME(), ''succeeded'', 1, SYSUTCDATETIME(), SYSUTCDATETIME())')",
+											"type": "Expression"
+										}
+									}
+								],
+								"scriptBlockExecutionTimeout": "00:30:00"
+							}
+						},
+						{
+							"name": "base64encode",
+							"type": "AzureFunctionActivity",
+							"dependsOn": [
+								{
+									"activity": "File name",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.04:00:00",
+								"retry": 2,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": true,
+								"secureInput": true
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"functionName": "base64Encode",
+								"body": {
+									"value": "{\n  \"file_path\": \"@{concat('softco-to-fusion/zip/', formatDateTime(utcNow(), 'yyyyMMdd'), '/', variables('file_name'))}\"\n}",
+									"type": "Expression"
+								},
+								"method": "POST"
+							},
+							"linkedServiceName": {
+								"referenceName": "uis_shared_process_function",
+								"type": "LinkedServiceReference"
+							}
+						},
+						{
+							"name": "Log Base64 Failure",
+							"type": "Script",
+							"dependsOn": [
+								{
+									"activity": "base64encode",
+									"dependencyConditions": [
+										"Failed"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.01:00:00",
+								"retry": 1,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"linkedServiceName": {
+								"referenceName": "uis_df_sql_linked_service",
+								"type": "LinkedServiceReference"
+							},
+							"typeProperties": {
+								"scripts": [
+									{
+										"type": "NonQuery",
+										"text": {
+											"value": "@concat('INSERT INTO [dbo].[tb_integration_transaction_log] ([pipeline_name],[pipeline_run_id],[activity_name],[activity_type],[step_name],[execution_status],[severity],[source_system],[target_system],[entity_name],[correlation_id],[transaction_id],[file_name],[message],[error_code],[error_message],[start_time_utc],[end_time_utc],[created_by],[created_at_utc],[status],[success_flag],[created_at],[updated_at]) VALUES (''', pipeline().Pipeline, ''',''', pipeline().RunId, ''',''base64encode'',''AzureFunctionActivity'',''Encode Zip File'',''Failed'',''Error'',''Blob Storage'',''UCM Upload'',''SoftCo AP Invoice'',''', pipeline().RunId, ''',''', pipeline().RunId, ''',''', replace(string(variables('file_name')), '''', ''''''), ''',''Failed to base64 encode the zip file.'',''', replace(string(activity('base64encode').error.code), '''', ''''''), ''',''', replace(string(activity('base64encode').error.message), '''', ''''''), ''', TRY_CAST(''', variables('pipeline_start_utc'), ''' AS datetime2), SYSUTCDATETIME(), ''ADF'', SYSUTCDATETIME(), ''failed'', 0, SYSUTCDATETIME(), SYSUTCDATETIME())')",
+											"type": "Expression"
+										}
+									}
+								],
+								"scriptBlockExecutionTimeout": "00:30:00"
+							}
+						},
+						{
+							"name": "Fail Base64",
+							"type": "Fail",
+							"dependsOn": [
+								{
+									"activity": "base64encode",
+									"dependencyConditions": [
+										"Failed"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"message": "Base64 encoding failed.",
+								"errorCode": "ADF_SOFTCO_AP_BASE64"
+							}
+						},
+						{
+							"name": "upload_to_ucm",
+							"type": "ExecutePipeline",
+							"dependsOn": [
+								{
+									"activity": "base64encode",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"secureInput": true
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "ftp_shared_upload_to_ucm_pl",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"file_name": {
+										"value": "@variables('file_name')",
+										"type": "Expression"
+									},
+									"document_account": "fin$/payables$/import$",
+									"base64_content": {
+										"value": "@activity('base64encode').output.data.encoded_string",
+										"type": "Expression"
+									}
+								}
+							}
+						},
+						{
+							"name": "Log UCM Upload Failure",
+							"type": "Script",
+							"dependsOn": [
+								{
+									"activity": "upload_to_ucm",
+									"dependencyConditions": [
+										"Failed"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.01:00:00",
+								"retry": 1,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"linkedServiceName": {
+								"referenceName": "uis_df_sql_linked_service",
+								"type": "LinkedServiceReference"
+							},
+							"typeProperties": {
+								"scripts": [
+									{
+										"type": "NonQuery",
+										"text": {
+											"value": "@concat('INSERT INTO [dbo].[tb_integration_transaction_log] ([pipeline_name],[pipeline_run_id],[activity_name],[activity_type],[step_name],[execution_status],[severity],[source_system],[target_system],[entity_name],[correlation_id],[transaction_id],[file_name],[message],[error_code],[error_message],[start_time_utc],[end_time_utc],[created_by],[created_at_utc],[status],[success_flag],[created_at],[updated_at]) VALUES (''', pipeline().Pipeline, ''',''', pipeline().RunId, ''',''upload_to_ucm'',''ExecutePipeline'',''Upload To UCM'',''Failed'',''Error'',''Blob Storage'',''UCM'',''SoftCo AP Invoice'',''', pipeline().RunId, ''',''', pipeline().RunId, ''',''', replace(string(variables('file_name')), '''', ''''''), ''',''UCM upload pipeline failed.'',''', replace(string(activity('upload_to_ucm').error.code), '''', ''''''), ''',''', replace(string(activity('upload_to_ucm').error.message), '''', ''''''), ''', TRY_CAST(''', variables('pipeline_start_utc'), ''' AS datetime2), SYSUTCDATETIME(), ''ADF'', SYSUTCDATETIME(), ''failed'', 0, SYSUTCDATETIME(), SYSUTCDATETIME())')",
+											"type": "Expression"
+										}
+									}
+								],
+								"scriptBlockExecutionTimeout": "00:30:00"
+							}
+						},
+						{
+							"name": "Fail UCM Upload",
+							"type": "Fail",
+							"dependsOn": [
+								{
+									"activity": "upload_to_ucm",
+									"dependencyConditions": [
+										"Failed"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"message": "UCM upload failed.",
+								"errorCode": "ADF_SOFTCO_AP_UCM_UPLOAD"
+							}
+						},
+						{
+							"name": "document_id",
+							"type": "SetVariable",
+							"dependsOn": [
+								{
+									"activity": "upload_to_ucm",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "document_id",
+								"value": {
+									"value": "@activity('upload_to_ucm').output.pipelineReturnValue.document_id",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "UCM Load Log",
+							"type": "Script",
+							"dependsOn": [
+								{
+									"activity": "document_id",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.01:00:00",
+								"retry": 1,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"linkedServiceName": {
+								"referenceName": "uis_df_sql_linked_service",
+								"type": "LinkedServiceReference"
+							},
+							"typeProperties": {
+								"scripts": [
+									{
+										"type": "NonQuery",
+										"text": {
+											"value": "@concat('INSERT INTO [dbo].[tb_integration_transaction_log] ([pipeline_name],[pipeline_run_id],[activity_name],[activity_type],[step_name],[execution_status],[severity],[source_system],[target_system],[entity_name],[correlation_id],[transaction_id],[file_name],[document_id],[message],[start_time_utc],[end_time_utc],[created_by],[created_at_utc],[status],[success_flag],[created_at],[updated_at]) VALUES (''', pipeline().Pipeline, ''',''', pipeline().RunId, ''',''upload_to_ucm'',''ExecutePipeline'',''Upload To UCM'',''Succeeded'',''Info'',''Blob Storage'',''UCM'',''SoftCo AP Invoice'',''', pipeline().RunId, ''',''', pipeline().RunId, ''',''', replace(string(variables('file_name')), '''', ''''''), ''', TRY_CAST(''', replace(string(variables('document_id')), '''', ''''''), ''' AS bigint), ''Uploaded zip package to UCM successfully.'', TRY_CAST(''', variables('pipeline_start_utc'), ''' AS datetime2), SYSUTCDATETIME(), ''ADF'', SYSUTCDATETIME(), ''succeeded'', 1, SYSUTCDATETIME(), SYSUTCDATETIME())')",
+											"type": "Expression"
+										}
+									}
+								],
+								"scriptBlockExecutionTimeout": "00:30:00"
+							}
+						},
+						{
+							"name": "Load to Interface table",
+							"type": "ExecutePipeline",
+							"dependsOn": [
+								{
+									"activity": "document_id",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "ftp_shared_submit_ess_job",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"payload": {
+										"value": "{\n  \"OperationName\": \"submitESSJobRequest\",\n  \"JobPackageName\": \"/oracle/apps/ess/financials/commonModules/shared/common/interfaceLoader\",\n  \"JobDefName\": \"InterfaceLoaderController\",\n  \"ESSParameters\": \"@{concat('1,', variables('document_id'), ',N,N,Null')}\"\n}",
+										"type": "Expression"
+									}
+								}
+							}
+						},
+						{
+							"name": "Log Interface Execution Failure",
+							"type": "Script",
+							"dependsOn": [
+								{
+									"activity": "Load to Interface table",
+									"dependencyConditions": [
+										"Failed"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.01:00:00",
+								"retry": 1,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"linkedServiceName": {
+								"referenceName": "uis_df_sql_linked_service",
+								"type": "LinkedServiceReference"
+							},
+							"typeProperties": {
+								"scripts": [
+									{
+										"type": "NonQuery",
+										"text": {
+											"value": "@concat('INSERT INTO [dbo].[tb_integration_transaction_log] ([pipeline_name],[pipeline_run_id],[activity_name],[activity_type],[step_name],[execution_status],[severity],[source_system],[target_system],[entity_name],[correlation_id],[transaction_id],[file_name],[document_id],[message],[error_code],[error_message],[start_time_utc],[end_time_utc],[created_by],[created_at_utc],[status],[success_flag],[created_at],[updated_at]) VALUES (''', pipeline().Pipeline, ''',''', pipeline().RunId, ''',''Load to Interface table'',''ExecutePipeline'',''Submit Interface Loader ESS Job'',''Failed'',''Error'',''UCM'',''Fusion AP Interface'',''SoftCo AP Invoice'',''', pipeline().RunId, ''',''', pipeline().RunId, ''',''', replace(string(variables('file_name')), '''', ''''''), ''', TRY_CAST(''', replace(string(variables('document_id')), '''', ''''''), ''' AS bigint), ''Interface loader submission pipeline failed.'',''', replace(string(activity('Load to Interface table').error.code), '''', ''''''), ''',''', replace(string(activity('Load to Interface table').error.message), '''', ''''''), ''', TRY_CAST(''', variables('pipeline_start_utc'), ''' AS datetime2), SYSUTCDATETIME(), ''ADF'', SYSUTCDATETIME(), ''failed'', 0, SYSUTCDATETIME(), SYSUTCDATETIME())')",
+											"type": "Expression"
+										}
+									}
+								],
+								"scriptBlockExecutionTimeout": "00:30:00"
+							}
+						},
+						{
+							"name": "Fail Interface Execution",
+							"type": "Fail",
+							"dependsOn": [
+								{
+									"activity": "Load to Interface table",
+									"dependencyConditions": [
+										"Failed"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"message": "Interface loader submission pipeline failed.",
+								"errorCode": "ADF_SOFTCO_AP_INTERFACE_EXECUTION"
+							}
+						},
+						{
+							"name": "Validate Interface Job",
+							"type": "Script",
+							"dependsOn": [
+								{
+									"activity": "Load to Interface table",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.01:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"linkedServiceName": {
+								"referenceName": "uis_df_sql_linked_service",
+								"type": "LinkedServiceReference"
+							},
+							"typeProperties": {
+								"scripts": [
+									{
+										"type": "NonQuery",
+										"text": {
+											"value": "@concat('IF LOWER(''', replace(string(activity('Load to Interface table').output.pipelineReturnValue.final_status), '''', ''''''), ''') IN (''succeeded'',''success'',''completed'') BEGIN SELECT 1; END ELSE BEGIN THROW 51000, ''Interface loader ESS job returned a non-success status.'', 1; END')",
+											"type": "Expression"
+										}
+									}
+								],
+								"scriptBlockExecutionTimeout": "00:30:00"
+							}
+						},
+						{
+							"name": "Log Interface Status Failure",
+							"type": "Script",
+							"dependsOn": [
+								{
+									"activity": "Validate Interface Job",
+									"dependencyConditions": [
+										"Failed"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.01:00:00",
+								"retry": 1,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"linkedServiceName": {
+								"referenceName": "uis_df_sql_linked_service",
+								"type": "LinkedServiceReference"
+							},
+							"typeProperties": {
+								"scripts": [
+									{
+										"type": "NonQuery",
+										"text": {
+											"value": "@concat('INSERT INTO [dbo].[tb_integration_transaction_log] ([pipeline_name],[pipeline_run_id],[activity_name],[activity_type],[step_name],[execution_status],[severity],[source_system],[target_system],[entity_name],[correlation_id],[transaction_id],[file_name],[document_id],[message],[error_message],[response_payload],[start_time_utc],[end_time_utc],[created_by],[created_at_utc],[status],[success_flag],[created_at],[updated_at]) VALUES (''', pipeline().Pipeline, ''',''', pipeline().RunId, ''',''Load to Interface table'',''ExecutePipeline'',''Validate Interface Loader Status'',''Failed'',''Error'',''Fusion AP Interface'',''Fusion AP Interface'',''SoftCo AP Invoice'',''', pipeline().RunId, ''',''', pipeline().RunId, ''',''', replace(string(variables('file_name')), '''', ''''''), ''', TRY_CAST(''', replace(string(variables('document_id')), '''', ''''''), ''' AS bigint), ''Interface loader returned a non-success final status.'',''', replace(string(activity('Load to Interface table').output.pipelineReturnValue.final_status), '''', ''''''), ''',''', replace(string(activity('Load to Interface table').output.pipelineReturnValue), '''', ''''''), ''', TRY_CAST(''', variables('pipeline_start_utc'), ''' AS datetime2), SYSUTCDATETIME(), ''ADF'', SYSUTCDATETIME(), ''failed'', 0, SYSUTCDATETIME(), SYSUTCDATETIME())')",
+											"type": "Expression"
+										}
+									}
+								],
+								"scriptBlockExecutionTimeout": "00:30:00"
+							}
+						},
+						{
+							"name": "Fail Interface Status",
+							"type": "Fail",
+							"dependsOn": [
+								{
+									"activity": "Validate Interface Job",
+									"dependencyConditions": [
+										"Failed"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"message": "Interface loader ESS job returned a non-success status.",
+								"errorCode": "ADF_SOFTCO_AP_INTERFACE_STATUS"
+							}
+						},
+						{
+							"name": "Load To Interface Log",
+							"type": "Script",
+							"dependsOn": [
+								{
+									"activity": "Validate Interface Job",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.01:00:00",
+								"retry": 1,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"linkedServiceName": {
+								"referenceName": "uis_df_sql_linked_service",
+								"type": "LinkedServiceReference"
+							},
+							"typeProperties": {
+								"scripts": [
+									{
+										"type": "NonQuery",
+										"text": {
+											"value": "@concat('INSERT INTO [dbo].[tb_integration_transaction_log] ([pipeline_name],[pipeline_run_id],[activity_name],[activity_type],[step_name],[execution_status],[severity],[source_system],[target_system],[entity_name],[correlation_id],[transaction_id],[file_name],[document_id],[message],[response_payload],[start_time_utc],[end_time_utc],[created_by],[created_at_utc],[status],[success_flag],[created_at],[updated_at]) VALUES (''', pipeline().Pipeline, ''',''', pipeline().RunId, ''',''Load to Interface table'',''ExecutePipeline'',''Submit Interface Loader ESS Job'',''Succeeded'',''Info'',''UCM'',''Fusion AP Interface'',''SoftCo AP Invoice'',''', pipeline().RunId, ''',''', pipeline().RunId, ''',''', replace(string(variables('file_name')), '''', ''''''), ''', TRY_CAST(''', replace(string(variables('document_id')), '''', ''''''), ''' AS bigint), ''Interface loader ESS job completed successfully.'',''', replace(string(activity('Load to Interface table').output.pipelineReturnValue), '''', ''''''), ''', TRY_CAST(''', variables('pipeline_start_utc'), ''' AS datetime2), SYSUTCDATETIME(), ''ADF'', SYSUTCDATETIME(), ''succeeded'', 1, SYSUTCDATETIME(), SYSUTCDATETIME())')",
+											"type": "Expression"
+										}
+									}
+								],
+								"scriptBlockExecutionTimeout": "00:30:00"
+							}
+						},
+						{
+							"name": "Load data to AP table",
+							"type": "ExecutePipeline",
+							"dependsOn": [
+								{
+									"activity": "Validate Interface Job",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "ftp_shared_submit_ess_job",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"payload": {
+										"value": "{\n  \"OperationName\": \"submitESSJobRequest\",\n  \"JobPackageName\": \"oracle/apps/ess/financials/payables/invoices/transactions\",\n  \"JobDefName\": \"APXIIMPT\",\n  \"ESSParameters\": \"@{concat('#NULL', ',', '300000014469089', ',N,', '#NULL', ',', '#NULL', ',', '#NULL', ',1000,SoftCo,', '#NULL', ',N,Y,300000014466368,', '#NULL', ',1')}\",\n  \"CallbackURL\": \"\"\n}",
+										"type": "Expression"
+									}
+								}
+							}
+						},
+						{
+							"name": "Log AP Execution Failure",
+							"type": "Script",
+							"dependsOn": [
+								{
+									"activity": "Load data to AP table",
+									"dependencyConditions": [
+										"Failed"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.01:00:00",
+								"retry": 1,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"linkedServiceName": {
+								"referenceName": "uis_df_sql_linked_service",
+								"type": "LinkedServiceReference"
+							},
+							"typeProperties": {
+								"scripts": [
+									{
+										"type": "NonQuery",
+										"text": {
+											"value": "@concat('INSERT INTO [dbo].[tb_integration_transaction_log] ([pipeline_name],[pipeline_run_id],[activity_name],[activity_type],[step_name],[execution_status],[severity],[source_system],[target_system],[entity_name],[correlation_id],[transaction_id],[file_name],[document_id],[message],[error_code],[error_message],[start_time_utc],[end_time_utc],[created_by],[created_at_utc],[status],[success_flag],[created_at],[updated_at]) VALUES (''', pipeline().Pipeline, ''',''', pipeline().RunId, ''',''Load data to AP table'',''ExecutePipeline'',''Submit AP Import ESS Job'',''Failed'',''Error'',''Fusion AP Interface'',''Fusion AP Base Tables'',''SoftCo AP Invoice'',''', pipeline().RunId, ''',''', pipeline().RunId, ''',''', replace(string(variables('file_name')), '''', ''''''), ''', TRY_CAST(''', replace(string(variables('document_id')), '''', ''''''), ''' AS bigint), ''AP import submission pipeline failed.'',''', replace(string(activity('Load data to AP table').error.code), '''', ''''''), ''',''', replace(string(activity('Load data to AP table').error.message), '''', ''''''), ''', TRY_CAST(''', variables('pipeline_start_utc'), ''' AS datetime2), SYSUTCDATETIME(), ''ADF'', SYSUTCDATETIME(), ''failed'', 0, SYSUTCDATETIME(), SYSUTCDATETIME())')",
+											"type": "Expression"
+										}
+									}
+								],
+								"scriptBlockExecutionTimeout": "00:30:00"
+							}
+						},
+						{
+							"name": "Fail AP Execution",
+							"type": "Fail",
+							"dependsOn": [
+								{
+									"activity": "Load data to AP table",
+									"dependencyConditions": [
+										"Failed"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"message": "AP import submission pipeline failed.",
+								"errorCode": "ADF_SOFTCO_AP_IMPORT_EXECUTION"
+							}
+						},
+						{
+							"name": "Validate AP Job",
+							"type": "Script",
+							"dependsOn": [
+								{
+									"activity": "Load data to AP table",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.01:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"linkedServiceName": {
+								"referenceName": "uis_df_sql_linked_service",
+								"type": "LinkedServiceReference"
+							},
+							"typeProperties": {
+								"scripts": [
+									{
+										"type": "NonQuery",
+										"text": {
+											"value": "@concat('IF LOWER(''', replace(string(activity('Load data to AP table').output.pipelineReturnValue.final_status), '''', ''''''), ''') IN (''succeeded'',''success'',''completed'') BEGIN SELECT 1; END ELSE BEGIN THROW 51001, ''AP import ESS job returned a non-success status.'', 1; END')",
+											"type": "Expression"
+										}
+									}
+								],
+								"scriptBlockExecutionTimeout": "00:30:00"
+							}
+						},
+						{
+							"name": "Log AP Status Failure",
+							"type": "Script",
+							"dependsOn": [
+								{
+									"activity": "Validate AP Job",
+									"dependencyConditions": [
+										"Failed"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.01:00:00",
+								"retry": 1,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"linkedServiceName": {
+								"referenceName": "uis_df_sql_linked_service",
+								"type": "LinkedServiceReference"
+							},
+							"typeProperties": {
+								"scripts": [
+									{
+										"type": "NonQuery",
+										"text": {
+											"value": "@concat('INSERT INTO [dbo].[tb_integration_transaction_log] ([pipeline_name],[pipeline_run_id],[activity_name],[activity_type],[step_name],[execution_status],[severity],[source_system],[target_system],[entity_name],[correlation_id],[transaction_id],[file_name],[document_id],[message],[error_message],[response_payload],[start_time_utc],[end_time_utc],[created_by],[created_at_utc],[status],[success_flag],[created_at],[updated_at]) VALUES (''', pipeline().Pipeline, ''',''', pipeline().RunId, ''',''Load data to AP table'',''ExecutePipeline'',''Validate AP Import Status'',''Failed'',''Error'',''Fusion AP Interface'',''Fusion AP Base Tables'',''SoftCo AP Invoice'',''', pipeline().RunId, ''',''', pipeline().RunId, ''',''', replace(string(variables('file_name')), '''', ''''''), ''', TRY_CAST(''', replace(string(variables('document_id')), '''', ''''''), ''' AS bigint), ''AP import ESS job returned a non-success final status.'',''', replace(string(activity('Load data to AP table').output.pipelineReturnValue.final_status), '''', ''''''), ''',''', replace(string(activity('Load data to AP table').output.pipelineReturnValue), '''', ''''''), ''', TRY_CAST(''', variables('pipeline_start_utc'), ''' AS datetime2), SYSUTCDATETIME(), ''ADF'', SYSUTCDATETIME(), ''failed'', 0, SYSUTCDATETIME(), SYSUTCDATETIME())')",
+											"type": "Expression"
+										}
+									}
+								],
+								"scriptBlockExecutionTimeout": "00:30:00"
+							}
+						},
+						{
+							"name": "Fail AP Status",
+							"type": "Fail",
+							"dependsOn": [
+								{
+									"activity": "Validate AP Job",
+									"dependencyConditions": [
+										"Failed"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"message": "AP import ESS job returned a non-success status.",
+								"errorCode": "ADF_SOFTCO_AP_IMPORT_STATUS"
+							}
+						},
+						{
+							"name": "Load To Base Table Log",
+							"type": "Script",
+							"dependsOn": [
+								{
+									"activity": "Validate AP Job",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.01:00:00",
+								"retry": 1,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"linkedServiceName": {
+								"referenceName": "uis_df_sql_linked_service",
+								"type": "LinkedServiceReference"
+							},
+							"typeProperties": {
+								"scripts": [
+									{
+										"type": "NonQuery",
+										"text": {
+											"value": "@concat('INSERT INTO [dbo].[tb_integration_transaction_log] ([pipeline_name],[pipeline_run_id],[activity_name],[activity_type],[step_name],[execution_status],[severity],[source_system],[target_system],[entity_name],[correlation_id],[transaction_id],[file_name],[document_id],[message],[response_payload],[start_time_utc],[end_time_utc],[created_by],[created_at_utc],[status],[success_flag],[created_at],[updated_at]) VALUES (''', pipeline().Pipeline, ''',''', pipeline().RunId, ''',''Load data to AP table'',''ExecutePipeline'',''Submit AP Import ESS Job'',''Succeeded'',''Info'',''Fusion AP Interface'',''Fusion AP Base Tables'',''SoftCo AP Invoice'',''', pipeline().RunId, ''',''', pipeline().RunId, ''',''', replace(string(variables('file_name')), '''', ''''''), ''', TRY_CAST(''', replace(string(variables('document_id')), '''', ''''''), ''' AS bigint), ''AP import ESS job completed successfully.'',''', replace(string(activity('Load data to AP table').output.pipelineReturnValue), '''', ''''''), ''', TRY_CAST(''', variables('pipeline_start_utc'), ''' AS datetime2), SYSUTCDATETIME(), ''ADF'', SYSUTCDATETIME(), ''succeeded'', 1, SYSUTCDATETIME(), SYSUTCDATETIME())')",
+											"type": "Expression"
+										}
+									}
+								],
+								"scriptBlockExecutionTimeout": "00:30:00"
+							}
+						},
+						{
+							"name": "Mark as Processed",
+							"type": "Script",
+							"dependsOn": [
+								{
+									"activity": "Validate AP Job",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.04:00:00",
+								"retry": 1,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"linkedServiceName": {
+								"referenceName": "uis_df_sql_linked_service",
+								"type": "LinkedServiceReference"
+							},
+							"typeProperties": {
+								"scripts": [
+									{
+										"type": "NonQuery",
+										"text": "UPDATE [dbo].[tb_generic_ap_invoice_lines_staging] SET processed_bit = 1, processed_at = SYSUTCDATETIME() WHERE ISNULL(processed_bit, 0) = 0; UPDATE [dbo].[tb_generic_ap_invoice_header_staging] SET processed_bit = 1, processed_at = SYSUTCDATETIME() WHERE ISNULL(processed_bit, 0) = 0;"
+									}
+								],
+								"scriptBlockExecutionTimeout": "01:00:00"
+							}
+						},
+						{
+							"name": "Log Mark Processed Failure",
+							"type": "Script",
+							"dependsOn": [
+								{
+									"activity": "Mark as Processed",
+									"dependencyConditions": [
+										"Failed"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.01:00:00",
+								"retry": 1,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"linkedServiceName": {
+								"referenceName": "uis_df_sql_linked_service",
+								"type": "LinkedServiceReference"
+							},
+							"typeProperties": {
+								"scripts": [
+									{
+										"type": "NonQuery",
+										"text": {
+											"value": "@concat('INSERT INTO [dbo].[tb_integration_transaction_log] ([pipeline_name],[pipeline_run_id],[activity_name],[activity_type],[step_name],[execution_status],[severity],[source_system],[target_system],[entity_name],[correlation_id],[transaction_id],[file_name],[document_id],[message],[error_code],[error_message],[start_time_utc],[end_time_utc],[created_by],[created_at_utc],[status],[success_flag],[created_at],[updated_at]) VALUES (''', pipeline().Pipeline, ''',''', pipeline().RunId, ''',''Mark as Processed'',''Script'',''Finalize Staging Rows'',''Failed'',''Error'',''UIS SQL'',''UIS SQL'',''SoftCo AP Invoice'',''', pipeline().RunId, ''',''', pipeline().RunId, ''',''', replace(string(variables('file_name')), '''', ''''''), ''', TRY_CAST(''', replace(string(variables('document_id')), '''', ''''''), ''' AS bigint), ''Failed to mark staging rows as processed after downstream success.'',''', replace(string(activity('Mark as Processed').error.code), '''', ''''''), ''',''', replace(string(activity('Mark as Processed').error.message), '''', ''''''), ''', TRY_CAST(''', variables('pipeline_start_utc'), ''' AS datetime2), SYSUTCDATETIME(), ''ADF'', SYSUTCDATETIME(), ''failed'', 0, SYSUTCDATETIME(), SYSUTCDATETIME())')",
+											"type": "Expression"
+										}
+									}
+								],
+								"scriptBlockExecutionTimeout": "00:30:00"
+							}
+						},
+						{
+							"name": "Fail Mark Processed",
+							"type": "Fail",
+							"dependsOn": [
+								{
+									"activity": "Mark as Processed",
+									"dependencyConditions": [
+										"Failed"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"message": "Failed to mark staging rows as processed.",
+								"errorCode": "ADF_SOFTCO_AP_MARK_PROCESSED"
+							}
+						},
+						{
+							"name": "Pipeline Success Log",
+							"type": "Script",
+							"dependsOn": [
+								{
+									"activity": "Mark as Processed",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.01:00:00",
+								"retry": 1,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"linkedServiceName": {
+								"referenceName": "uis_df_sql_linked_service",
+								"type": "LinkedServiceReference"
+							},
+							"typeProperties": {
+								"scripts": [
+									{
+										"type": "NonQuery",
+										"text": {
+											"value": "@concat('INSERT INTO [dbo].[tb_integration_transaction_log] ([pipeline_name],[pipeline_run_id],[activity_name],[activity_type],[step_name],[execution_status],[severity],[source_system],[target_system],[entity_name],[correlation_id],[transaction_id],[file_name],[message],[start_time_utc],[end_time_utc],[created_by],[created_at_utc],[status],[success_flag],[created_at],[updated_at]) VALUES (''', pipeline().Pipeline, ''',''', pipeline().RunId, ''',''Pipeline Success Log'',''Script'',''Pipeline Complete'',''Succeeded'',''Info'',''UIS SQL'',''Fusion AP'',''SoftCo AP Invoice'',''', pipeline().RunId, ''',''', pipeline().RunId, ''',''', replace(string(variables('file_name')), '''', ''''''), ''',''Pipeline completed successfully and staging rows were marked processed.'', TRY_CAST(''', variables('pipeline_start_utc'), ''' AS datetime2), SYSUTCDATETIME(), ''ADF'', SYSUTCDATETIME(), ''succeeded'', 1, SYSUTCDATETIME(), SYSUTCDATETIME())')",
+											"type": "Expression"
+										}
+									}
+								],
+								"scriptBlockExecutionTimeout": "00:30:00"
+							}
+						}
+					]
+				}
+			}
+		],
+		"variables": {
+			"file_name": {
+				"type": "String"
+			},
+			"document_id": {
+				"type": "String"
+			},
+			"pipeline_start_utc": {
+				"type": "String"
+			}
+		},
+		"folder": {
+			"name": "df_softco_to_fusion_ap_invoice"
+		},
+		"annotations": [],
+		"lastPublishTime": "2026-03-27T11:30:23Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

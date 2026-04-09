@@ -1,0 +1,30 @@
+{
+	"name": "df_barclays_statement_inbound_storage_container_dataset",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "uis_df_storage_linked_service",
+			"type": "LinkedServiceReference"
+		},
+		"parameters": {
+			"file_path": {
+				"type": "string"
+			}
+		},
+		"folder": {
+			"name": "df_barclays_statement_inbound_datasets"
+		},
+		"annotations": [],
+		"type": "Binary",
+		"typeProperties": {
+			"location": {
+				"type": "AzureBlobStorageLocation",
+				"folderPath": {
+					"value": "@dataset().file_path",
+					"type": "Expression"
+				},
+				"container": "barclays"
+			}
+		}
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}

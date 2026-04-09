@@ -1,0 +1,115 @@
+{
+	"name": "df_process_staged_softco_ap_invoice_batches",
+	"properties": {
+		"activities": [
+			{
+				"name": "Get Ready Batches",
+				"type": "Lookup",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.02:00:00",
+					"retry": 1,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": {
+							"value": "@concat('SELECT CONVERT(nvarchar(36), [batch_id]) AS [batch_id], [source_system], [entity_name] FROM [dbo].[tbl_integration_batch] WHERE [batch_status] IN (''Staged'',''Ready For Reprocess'') AND [source_system] = ''', pipeline().parameters.p_source_system, ''' AND [entity_name] = ''', pipeline().parameters.p_entity_name, ''' ORDER BY [started_at_utc];')",
+							"type": "Expression"
+						},
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "df_camsis_ap_invoices_raw_table_dataset",
+						"type": "DatasetReference",
+						"parameters": {
+							"table_name": "*"
+						}
+					},
+					"firstRowOnly": false
+				}
+			},
+			{
+				"name": "ForEach Batch",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "Get Ready Batches",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('Get Ready Batches').output.value",
+						"type": "Expression"
+					},
+					"isSequential": true,
+					"activities": [
+						{
+							"name": "Run Stage 2 Worker",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"policy": {
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "df_softco_ap_invoice_orchestrator",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"p_batch_id": {
+										"value": "@item().batch_id",
+										"type": "Expression"
+									},
+									"p_source_system": {
+										"value": "@item().source_system",
+										"type": "Expression"
+									},
+									"p_entity_name": {
+										"value": "@item().entity_name",
+										"type": "Expression"
+									},
+									"p_bip_report_name": {
+										"value": "@pipeline().parameters.p_bip_report_name",
+										"type": "Expression"
+									}
+								}
+							}
+						}
+					]
+				}
+			}
+		],
+		"parameters": {
+			"p_source_system": {
+				"type": "String",
+				"defaultValue": "SoftCo"
+			},
+			"p_entity_name": {
+				"type": "String",
+				"defaultValue": "AP Invoice"
+			},
+			"p_bip_report_name": {
+				"type": "String",
+				"defaultValue": "AP Invoice Reconciliation BIP"
+			}
+		},
+		"folder": {
+			"name": "df_softco_to_fusion_ap_invoice_inbound_integration (IN-04)/stage 2 - to be triggered every X hours"
+		},
+		"annotations": [],
+		"lastPublishTime": "2026-03-27T18:37:42Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

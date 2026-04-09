@@ -1,0 +1,27 @@
+{
+	"name": "common_rest_dataset",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "uis_df_oracle_rest_linked_service",
+			"type": "LinkedServiceReference"
+		},
+		"parameters": {
+			"relative_url": {
+				"type": "string"
+			}
+		},
+		"folder": {
+			"name": "df_ftp_ais_common_datasets"
+		},
+		"annotations": [],
+		"type": "RestResource",
+		"typeProperties": {
+			"relativeUrl": {
+				"value": "@dataset().relative_url",
+				"type": "Expression"
+			}
+		},
+		"schema": []
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}

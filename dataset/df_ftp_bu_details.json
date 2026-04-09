@@ -1,0 +1,19 @@
+{
+	"name": "df_ftp_bu_details",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "uis_df_oracle_rest_linked_service",
+			"type": "LinkedServiceReference"
+		},
+		"folder": {
+			"name": "df_camsis_ap_invoices_inbound_datasets"
+		},
+		"annotations": [],
+		"type": "RestResource",
+		"typeProperties": {
+			"relativeUrl": "/crmRestApi/resources/11.13.18.05/subscriptionBusinessUnits?totalResults=true"
+		},
+		"schema": []
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}

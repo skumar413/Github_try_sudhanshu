@@ -1,0 +1,714 @@
+{
+	"name": "df_get_softco_ap_invoice",
+	"properties": {
+		"activities": [
+			{
+				"name": "Log Pipeline Start",
+				"type": "Script",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "@concat('INSERT INTO [dbo].[tb_integration_transaction_log] ([pipeline_name],[pipeline_run_id],[activity_name],[activity_type],[execution_status],[source_system],[target_system],[entity_name],[message]) VALUES (''', pipeline().Pipeline, ''',''', pipeline().RunId, ''',''Pipeline'',''Pipeline'',''Started'',''SoftCo'',''ADLS'',''AP Invoice'',''Pipeline execution started'')')",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			},
+			{
+				"name": "Login",
+				"type": "WebActivity",
+				"dependsOn": [
+					{
+						"activity": "Log Pipeline Start",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "POST",
+					"url": "https://unicam-uat.softco.com/SoftCo.PublicBridge/api/v5/Authentication/Login",
+					"body": {
+						"isClientAnnounced": true,
+						"password": "d&/Xk3}BlGa2",
+						"userName": "apiuser"
+					}
+				}
+			},
+			{
+				"name": "Log Login Failure",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "Login",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "@concat('INSERT INTO [dbo].[tb_integration_transaction_log] ([pipeline_name],[pipeline_run_id],[activity_name],[activity_type],[execution_status],[source_system],[target_system],[entity_name],[message]) VALUES (''', pipeline().Pipeline, ''',''', pipeline().RunId, ''',''Login'',''WebActivity'',''Failed'',''SoftCo'',''ADF'',''AP Invoice'',''Login failed'')')",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			},
+			{
+				"name": "SessionId",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Login",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "SessionId",
+					"value": {
+						"value": "@activity('Login').output.sessionId",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Log Login Success",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "SessionId",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "@concat('INSERT INTO [dbo].[tb_integration_transaction_log] ([pipeline_name],[pipeline_run_id],[activity_name],[activity_type],[execution_status],[source_system],[target_system],[entity_name],[correlation_id],[message]) VALUES (''', pipeline().Pipeline, ''',''', pipeline().RunId, ''',''Login'',''WebActivity'',''Succeeded'',''SoftCo'',''ADF'',''AP Invoice'',''', 'SessionID', ''',''Login succeeded and session created'')')",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			},
+			{
+				"name": "List Doc Ids",
+				"type": "WebActivity",
+				"dependsOn": [
+					{
+						"activity": "SessionId",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "POST",
+					"headers": {
+						"Authorization": {
+							"value": "@concat('Basic sessionId= ',variables('SessionId'))",
+							"type": "Expression"
+						}
+					},
+					"url": "https://unicam-uat.softco.com/SoftCo.PublicBridge/api/v5/Ecmread/Indexes/A_api_data_1_139/IndexRows",
+					"body": {
+						"queryFields": [
+							{
+								"fldstatus": {
+									"criteria": [
+										{
+											"comparisonValues": [
+												"new"
+											],
+											"queryOperator": "Equals"
+										}
+									]
+								},
+								"messageType": {
+									"criteria": [
+										{
+											"comparisonValues": [
+												"invoiceExport"
+											],
+											"queryOperator": "Equals"
+										}
+									]
+								}
+							}
+						],
+						"sortColumn": "DocId"
+					}
+				}
+			},
+			{
+				"name": "Log List Doc Ids Failure",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "List Doc Ids",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "@concat('INSERT INTO [dbo].[tb_integration_transaction_log] ([pipeline_name],[pipeline_run_id],[activity_name],[activity_type],[execution_status],[source_system],[target_system],[entity_name],[message]) VALUES (''', pipeline().Pipeline, ''',''', pipeline().RunId, ''',''List Doc Ids'',''WebActivity'',''Failed'',''SoftCo'',''ADF'',''AP Invoice'',''Listing document ids failed'')')",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			},
+			{
+				"name": "Log List Doc Ids Success",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "List Doc Ids",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "@concat('INSERT INTO [dbo].[tb_integration_transaction_log] ([pipeline_name],[pipeline_run_id],[activity_name],[activity_type],[execution_status],[source_system],[target_system],[entity_name],[rows_read],[message]) VALUES (''', pipeline().Pipeline, ''',''', pipeline().RunId, ''',''List Doc Ids'',''WebActivity'',''Succeeded'',''SoftCo'',''ADF'',''AP Invoice'',', string(length(activity('List Doc Ids').output.queryResults)), ',''Listed documents successfully'')')",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			},
+			{
+				"name": "Loop Doc Ids",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "List Doc Ids",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('List Doc Ids').output.queryResults",
+						"type": "Expression"
+					},
+					"isSequential": true,
+					"activities": [
+						{
+							"name": "Log Doc Start",
+							"type": "Script",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"linkedServiceName": {
+								"referenceName": "uis_df_sql_linked_service",
+								"type": "LinkedServiceReference"
+							},
+							"typeProperties": {
+								"scripts": [
+									{
+										"type": "NonQuery",
+										"text": {
+											"value": "@concat('INSERT INTO [dbo].[tb_integration_transaction_log] ([pipeline_name],[pipeline_run_id],[activity_name],[activity_type],[execution_status],[source_system],[target_system],[entity_name],[doc_id],[message]) VALUES (''', pipeline().Pipeline, ''',''', pipeline().RunId, ''',''Process Document'',''ForEach'',''Started'',''SoftCo'',''ADLS'',''AP Invoice'',''', string(item().docId), ''',''Started processing document'')')",
+											"type": "Expression"
+										}
+									}
+								],
+								"scriptBlockExecutionTimeout": "02:00:00"
+							}
+						},
+						{
+							"name": "Get Invoice",
+							"type": "WebActivity",
+							"dependsOn": [
+								{
+									"activity": "Log Doc Start",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"method": "GET",
+								"headers": {
+									"Authorization": {
+										"value": "@concat('Basic sessionId= ',variables('SessionId'))",
+										"type": "Expression"
+									}
+								},
+								"url": {
+									"value": "@concat('https://unicam-uat.softco.com/SoftCo.PublicBridge/api/v5/Ecmread/Documents/',item().docId,'/Pages')",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "Log Get Invoice Failure",
+							"type": "Script",
+							"dependsOn": [
+								{
+									"activity": "Get Invoice",
+									"dependencyConditions": [
+										"Failed"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"linkedServiceName": {
+								"referenceName": "uis_df_sql_linked_service",
+								"type": "LinkedServiceReference"
+							},
+							"typeProperties": {
+								"scripts": [
+									{
+										"type": "NonQuery",
+										"text": {
+											"value": "@concat('INSERT INTO [dbo].[tb_integration_transaction_log] ([pipeline_name],[pipeline_run_id],[activity_name],[activity_type],[execution_status],[source_system],[target_system],[entity_name],[doc_id],[message]) VALUES (''', pipeline().Pipeline, ''',''', pipeline().RunId, ''',''Get Invoice'',''WebActivity'',''Failed'',''SoftCo'',''ADF'',''AP Invoice'',''', string(item().docId), ''',''Failed to fetch invoice document'')')",
+											"type": "Expression"
+										}
+									}
+								],
+								"scriptBlockExecutionTimeout": "02:00:00"
+							}
+						},
+						{
+							"name": "Base64 Decode",
+							"type": "AzureFunctionActivity",
+							"dependsOn": [
+								{
+									"activity": "Get Invoice",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"functionName": "base64Decode",
+								"body": {
+									"value": "@concat('{\"encoded_string\":\"', activity('Get Invoice').output.pages[0].docData, '\",\"target_path\":\"softco-to-fusion/inbound/softco_invoice_', formatDateTime(utcNow(), 'yyyyMMdd_HHmmss'), '.xml\"}')",
+									"type": "Expression"
+								},
+								"method": "POST"
+							},
+							"linkedServiceName": {
+								"referenceName": "uis_shared_process_function",
+								"type": "LinkedServiceReference"
+							}
+						},
+						{
+							"name": "Log Decode Failure",
+							"type": "Script",
+							"dependsOn": [
+								{
+									"activity": "Base64 Decode",
+									"dependencyConditions": [
+										"Failed"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"linkedServiceName": {
+								"referenceName": "uis_df_sql_linked_service",
+								"type": "LinkedServiceReference"
+							},
+							"typeProperties": {
+								"scripts": [
+									{
+										"type": "NonQuery",
+										"text": {
+											"value": "@concat('INSERT INTO [dbo].[tb_integration_transaction_log] ([pipeline_name],[pipeline_run_id],[activity_name],[activity_type],[execution_status],[source_system],[target_system],[entity_name],[doc_id],[message]) VALUES (''', pipeline().Pipeline, ''',''', pipeline().RunId, ''',''Base64 Decode'',''AzureFunctionActivity'',''Failed'',''SoftCo'',''ADLS'',''AP Invoice'',''', string(item().docId), ''',''Base64 decode or file write failed'')')",
+											"type": "Expression"
+										}
+									}
+								],
+								"scriptBlockExecutionTimeout": "02:00:00"
+							}
+						},
+						{
+							"name": "Mark Invoices as Processed",
+							"type": "WebActivity",
+							"dependsOn": [
+								{
+									"activity": "Base64 Decode",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"method": "POST",
+								"headers": {
+									"Authorization": {
+										"value": "@concat('Basic sessionId= ',variables('SessionId'))",
+										"type": "Expression"
+									}
+								},
+								"url": "https://unicam-uat.softco.com/SoftCo.PublicBridge/api/v5/Ecmwrite/Indexes/A_api_data_1_139/IndexRows",
+								"body": {
+									"value": "@concat('{\"changes\":[{\"ID\":null,\"dataFields\":{\"fldstatus\":\"processed\"},\"keyFields\":[{\"DocID\":\"', string(item().docId), '\"}],\"operation\":\"Modify\"}]}')",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "Log Mark Processed Failure",
+							"type": "Script",
+							"dependsOn": [
+								{
+									"activity": "Mark Invoices as Processed",
+									"dependencyConditions": [
+										"Failed"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"linkedServiceName": {
+								"referenceName": "uis_df_sql_linked_service",
+								"type": "LinkedServiceReference"
+							},
+							"typeProperties": {
+								"scripts": [
+									{
+										"type": "NonQuery",
+										"text": {
+											"value": "@concat('INSERT INTO [dbo].[tb_integration_transaction_log] ([pipeline_name],[pipeline_run_id],[activity_name],[activity_type],[execution_status],[source_system],[target_system],[entity_name],[doc_id],[message]) VALUES (''', pipeline().Pipeline, ''',''', pipeline().RunId, ''',''Mark Invoices as Processed'',''WebActivity'',''Failed'',''SoftCo'',''SoftCo'',''AP Invoice'',''', string(item().docId), ''',''Failed to mark document as processed in SoftCo'')')",
+											"type": "Expression"
+										}
+									}
+								],
+								"scriptBlockExecutionTimeout": "02:00:00"
+							}
+						},
+						{
+							"name": "Log Doc Success",
+							"type": "Script",
+							"dependsOn": [
+								{
+									"activity": "Mark Invoices as Processed",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"linkedServiceName": {
+								"referenceName": "uis_df_sql_linked_service",
+								"type": "LinkedServiceReference"
+							},
+							"typeProperties": {
+								"scripts": [
+									{
+										"type": "NonQuery",
+										"text": {
+											"value": "@concat('INSERT INTO [dbo].[tb_integration_transaction_log] ([pipeline_name],[pipeline_run_id],[activity_name],[activity_type],[execution_status],[source_system],[target_system],[entity_name],[doc_id],[message]) VALUES (''', pipeline().Pipeline, ''',''', pipeline().RunId, ''',''Process Document'',''ForEach'',''Succeeded'',''SoftCo'',''ADLS'',''AP Invoice'',''', string(item().docId), ''',''Document processed successfully'')')",
+											"type": "Expression"
+										}
+									}
+								],
+								"scriptBlockExecutionTimeout": "02:00:00"
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "Log Pipeline Success",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "Loop Doc Ids",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "@concat('INSERT INTO [dbo].[tb_integration_transaction_log] ([pipeline_name],[pipeline_run_id],[activity_name],[activity_type],[execution_status],[source_system],[target_system],[entity_name],[message]) VALUES (''', pipeline().Pipeline, ''',''', pipeline().RunId, ''',''Pipeline'',''Pipeline'',''Succeeded'',''SoftCo'',''ADLS'',''AP Invoice'',''Pipeline execution completed successfully'')')",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			},
+			{
+				"name": "Logout",
+				"type": "WebActivity",
+				"dependsOn": [
+					{
+						"activity": "Loop Doc Ids",
+						"dependencyConditions": [
+							"Succeeded",
+							"Skipped",
+							"Failed"
+						]
+					},
+					{
+						"activity": "SessionId",
+						"dependencyConditions": [
+							"Succeeded",
+							"Skipped"
+						]
+					},
+					{
+						"activity": "List Doc Ids",
+						"dependencyConditions": [
+							"Succeeded",
+							"Skipped",
+							"Failed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "POST",
+					"url": "https://unicam-uat.softco.com/SoftCo.PublicBridge/api/v5/Authentication/Logout",
+					"body": {
+						"value": "{\n  \"sessionId\": \"@{variables('SessionId')}\"\n}",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Log Logout Result",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "Logout",
+						"dependencyConditions": [
+							"Succeeded",
+							"Failed",
+							"Skipped"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "@concat('INSERT INTO [dbo].[tb_integration_transaction_log] ([pipeline_name],[pipeline_run_id],[activity_name],[activity_type],[execution_status],[source_system],[target_system],[entity_name],[message]) VALUES (''', pipeline().Pipeline, ''',''', pipeline().RunId, ''',''Logout'',''WebActivity'',''Completed'',''SoftCo'',''ADF'',''AP Invoice'',''Logout activity completed'')')",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			}
+		],
+		"variables": {
+			"SessionId": {
+				"type": "String"
+			}
+		},
+		"folder": {
+			"name": "df_softco_to_fusion_ap_invoice"
+		},
+		"annotations": [],
+		"lastPublishTime": "2026-03-20T17:42:12Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

@@ -1,0 +1,22 @@
+{
+	"name": "uis_fusion_base_url_linked_service",
+	"type": "Microsoft.DataFactory/factories/linkedservices",
+	"properties": {
+		"annotations": [],
+		"type": "WebConnection",
+		"typeProperties": {
+			"url": "https://fa-evjk-dev4-saasfaprod1.fa.ocs.oraclecloud.com:443",
+			"enableServerCertificateValidation": true,
+			"authenticationType": "Basic",
+			"userName": "AIS_Integration_User",
+			"password": {
+				"type": "AzureKeyVaultSecret",
+				"store": {
+					"referenceName": "usi_df_kv_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"secretName": "oracle-password"
+			}
+		}
+	}
+}

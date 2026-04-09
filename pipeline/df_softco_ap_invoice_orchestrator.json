@@ -1,0 +1,165 @@
+{
+	"name": "df_softco_ap_invoice_orchestrator",
+	"properties": {
+		"activities": [
+			{
+				"name": "Register Processing Run",
+				"type": "Script",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.01:00:00",
+					"retry": 1,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "@concat('IF NOT EXISTS (SELECT 1 FROM [dbo].[tbl_integration_batch] WHERE [batch_id] = TRY_CONVERT(uniqueidentifier, ''', pipeline().parameters.p_batch_id, ''')) BEGIN THROW 51000, ''Batch record not found. Run stage 1 extraction and staging first.'', 1; END; IF EXISTS (SELECT 1 FROM [dbo].[tbl_integration_batch] WHERE [batch_id] = TRY_CONVERT(uniqueidentifier, ''', pipeline().parameters.p_batch_id, ''') AND [batch_status] NOT IN (''Staged'', ''Ready For Reprocess'')) BEGIN THROW 51001, ''Batch is not in a stage-2 processable state.'', 1; END; UPDATE [dbo].[tbl_integration_batch] SET [orchestrator_pipeline_name] = ''', replace(pipeline().Pipeline, '''', ''''''), ''', [orchestrator_run_id] = ''', replace(pipeline().RunId, '''', ''''''), ''', [batch_status] = ''Delivering'', [current_stage] = ''Deliver To Fusion'', [updated_at_utc] = SYSUTCDATETIME() WHERE [batch_id] = TRY_CONVERT(uniqueidentifier, ''', pipeline().parameters.p_batch_id, ''') AND [batch_status] IN (''Staged'', ''Ready For Reprocess'');')",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "00:30:00"
+				}
+			},
+			{
+				"name": "Deliver To Fusion",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Register Processing Run",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "df_load_and_import_softco_ap_invoice",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"p_batch_id": {
+							"value": "@pipeline().parameters.p_batch_id",
+							"type": "Expression"
+						},
+						"p_source_system": {
+							"value": "@pipeline().parameters.p_source_system",
+							"type": "Expression"
+						},
+						"p_entity_name": {
+							"value": "@pipeline().parameters.p_entity_name",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "Register Reconciliation",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Deliver To Fusion",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "df_reconcile_ap_invoice_status",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"p_batch_id": {
+							"value": "@pipeline().parameters.p_batch_id",
+							"type": "Expression"
+						},
+						"p_bip_report_name": {
+							"value": "@pipeline().parameters.p_bip_report_name",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "Complete Batch",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "Register Reconciliation",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.01:00:00",
+					"retry": 1,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "@concat('UPDATE [dbo].[tbl_integration_batch] SET [batch_status] = ''Completed'', [current_stage] = ''Completed'', [completed_at_utc] = SYSUTCDATETIME(), [updated_at_utc] = SYSUTCDATETIME() WHERE [batch_id] = TRY_CONVERT(uniqueidentifier, ''', pipeline().parameters.p_batch_id, ''');')",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "00:30:00"
+				}
+			}
+		],
+		"parameters": {
+			"p_batch_id": {
+				"type": "String"
+			},
+			"p_source_system": {
+				"type": "String",
+				"defaultValue": "SoftCo"
+			},
+			"p_entity_name": {
+				"type": "String",
+				"defaultValue": "AP Invoice"
+			},
+			"p_bip_report_name": {
+				"type": "String",
+				"defaultValue": "AP Invoice Reconciliation BIP"
+			}
+		},
+		"folder": {
+			"name": "df_softco_to_fusion_ap_invoice_inbound_integration (IN-04)/stage 2 - to be triggered every X hours"
+		},
+		"annotations": [],
+		"lastPublishTime": "2026-03-27T18:37:42Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

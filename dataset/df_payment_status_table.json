@@ -1,0 +1,73 @@
+{
+	"name": "df_payment_status_table",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "uis_df_sql_linked_service",
+			"type": "LinkedServiceReference"
+		},
+		"parameters": {
+			"table_name": {
+				"type": "String"
+			}
+		},
+		"folder": {
+			"name": "df_fusion_to_camsis_dataset"
+		},
+		"annotations": [],
+		"type": "AzureSqlTable",
+		"schema": [
+			{
+				"name": "SOURCE",
+				"type": "nvarchar"
+			},
+			{
+				"name": "CASE_ID",
+				"type": "nvarchar"
+			},
+			{
+				"name": "CORRELATION_ID",
+				"type": "nvarchar"
+			},
+			{
+				"name": "INVOICE_NUMBER",
+				"type": "nvarchar"
+			},
+			{
+				"name": "SUPPLIER_NUMBER",
+				"type": "nvarchar"
+			},
+			{
+				"name": "PAYMENT_STATUS",
+				"type": "nvarchar"
+			},
+			{
+				"name": "PAYMENT_DATE",
+				"type": "nvarchar"
+			},
+			{
+				"name": "PAYMENT_NUMBER",
+				"type": "nvarchar"
+			},
+			{
+				"name": "PAYMENT_METHOD",
+				"type": "nvarchar"
+			},
+			{
+				"name": "PAYMENT_AMOUNT",
+				"type": "nvarchar"
+			},
+			{
+				"name": "CURRENCY",
+				"type": "nvarchar"
+			}
+		],
+		"typeProperties": {
+			"schema": "dbo",
+			"table": {
+				"value": "@dataset().table_name",
+				"type": "Expression"
+			}
+		}
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}

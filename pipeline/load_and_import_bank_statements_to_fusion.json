@@ -1,0 +1,659 @@
+{
+	"name": "load_and_import_bank_statements_to_fusion",
+	"properties": {
+		"activities": [
+			{
+				"name": "Load And Import Bank Statements",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "List Zip",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('List Zip').output.childItems",
+						"type": "Expression"
+					},
+					"isSequential": true,
+					"activities": [
+						{
+							"name": "document_id",
+							"type": "SetVariable",
+							"dependsOn": [
+								{
+									"activity": "upload_to_ucm",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "document_id",
+								"value": {
+									"value": "@activity('upload_to_ucm').output.pipelineReturnValue.document_id",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "Load to UCM Logging",
+							"type": "SqlServerStoredProcedure",
+							"dependsOn": [
+								{
+									"activity": "document_id",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"storedProcedureName": "[dbo].[sp_upsert_integration_job_logs]",
+								"storedProcedureParameters": {
+									"ess_job_status": {
+										"value": null,
+										"type": "String"
+									},
+									"ess_process_id": {
+										"value": "",
+										"type": "String"
+									},
+									"integration_status_message": {
+										"value": "Load To UCM Successful",
+										"type": "String"
+									},
+									"last_error_message": {
+										"value": null,
+										"type": "String"
+									},
+									"pipeline_run_id": {
+										"value": {
+											"value": "@pipeline().RunId",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"processed_file_name": {
+										"value": {
+											"value": "@item().name",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"retry_count": {
+										"value": "0",
+										"type": "Int32"
+									},
+									"ucm_document_id": {
+										"value": {
+											"value": "@variables('document_id')",
+											"type": "Expression"
+										},
+										"type": "String"
+									}
+								}
+							},
+							"linkedServiceName": {
+								"referenceName": "uis_df_sql_linked_service",
+								"type": "LinkedServiceReference"
+							}
+						},
+						{
+							"name": "Logging Starts",
+							"type": "SqlServerStoredProcedure",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"storedProcedureName": "[dbo].[sp_upsert_integration_job_logs]",
+								"storedProcedureParameters": {
+									"ess_job_status": {
+										"value": null,
+										"type": "String"
+									},
+									"ess_process_id": {
+										"value": null,
+										"type": "String"
+									},
+									"integration_status_message": {
+										"value": "Process Started",
+										"type": "String"
+									},
+									"last_error_message": {
+										"value": null,
+										"type": "String"
+									},
+									"pipeline_run_id": {
+										"value": {
+											"value": "@pipeline().RunId",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"processed_file_name": {
+										"value": {
+											"value": "@item().name",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"retry_count": {
+										"value": "0",
+										"type": "Int32"
+									},
+									"ucm_document_id": {
+										"value": null,
+										"type": "String"
+									}
+								}
+							},
+							"linkedServiceName": {
+								"referenceName": "uis_df_sql_linked_service",
+								"type": "LinkedServiceReference"
+							}
+						},
+						{
+							"name": "Update ESS Process Logs",
+							"type": "SqlServerStoredProcedure",
+							"dependsOn": [
+								{
+									"activity": "Archive Statement",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								},
+								{
+									"activity": "base64_encode",
+									"dependencyConditions": [
+										"Skipped"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"storedProcedureName": "[dbo].[sp_upsert_integration_job_logs]",
+								"storedProcedureParameters": {
+									"ess_job_status": {
+										"value": {
+											"value": "@activity('Load and Import Bank Statement').output.pipelineReturnValue.final_status",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"ess_process_id": {
+										"value": {
+											"value": "@activity('Load and Import Bank Statement').output.pipelineReturnValue.process_id",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"integration_status_message": {
+										"value": "Integration Pipeline Succeeded",
+										"type": "String"
+									},
+									"last_error_message": {
+										"value": null,
+										"type": "String"
+									},
+									"pipeline_run_id": {
+										"value": {
+											"value": "@pipeline().RunId",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"processed_file_name": {
+										"value": {
+											"value": "@item().name",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"retry_count": {
+										"value": "0",
+										"type": "Int32"
+									},
+									"ucm_document_id": {
+										"value": {
+											"value": "@variables('document_id')",
+											"type": "Expression"
+										},
+										"type": "String"
+									}
+								}
+							},
+							"linkedServiceName": {
+								"referenceName": "uis_df_sql_linked_service",
+								"type": "LinkedServiceReference"
+							}
+						},
+						{
+							"name": "Catch Error",
+							"type": "SetVariable",
+							"dependsOn": [
+								{
+									"activity": "document_id",
+									"dependencyConditions": [
+										"Skipped",
+										"Completed"
+									]
+								},
+								{
+									"activity": "Load to UCM Logging",
+									"dependencyConditions": [
+										"Skipped",
+										"Completed"
+									]
+								},
+								{
+									"activity": "Logging Starts",
+									"dependencyConditions": [
+										"Completed"
+									]
+								},
+								{
+									"activity": "Load and Import Bank Statement",
+									"dependencyConditions": [
+										"Skipped",
+										"Completed"
+									]
+								},
+								{
+									"activity": "upload_to_ucm",
+									"dependencyConditions": [
+										"Completed",
+										"Skipped"
+									]
+								},
+								{
+									"activity": "Archive Statement",
+									"dependencyConditions": [
+										"Failed",
+										"Skipped"
+									]
+								},
+								{
+									"activity": "base64_encode",
+									"dependencyConditions": [
+										"Completed"
+									]
+								}
+							],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "ErrorMsg",
+								"value": {
+									"value": "@concat(\n    coalesce(activity('Logging Starts').output.error?.message, ''), '|',\n    coalesce(activity('upload_to_ucm').output.error?.message, ''), '|',\n    coalesce(activity('Load to UCM Logging').output.error?.message, ''), '|',\n    coalesce(activity('Load and Import Bank Statement').output.error?.message, '')\n)",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "Update Error Status",
+							"type": "SqlServerStoredProcedure",
+							"dependsOn": [
+								{
+									"activity": "Catch Error",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"storedProcedureName": "[dbo].[sp_upsert_integration_job_logs]",
+								"storedProcedureParameters": {
+									"ess_job_status": {
+										"value": "FAILED",
+										"type": "String"
+									},
+									"ess_process_id": {
+										"value": null,
+										"type": "String"
+									},
+									"integration_status_message": {
+										"value": "FAILED",
+										"type": "String"
+									},
+									"last_error_message": {
+										"value": {
+											"value": "@variables('ErrorMsg')",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"pipeline_run_id": {
+										"value": {
+											"value": "@pipeline().RunId",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"processed_file_name": {
+										"value": {
+											"value": "@item().name",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"retry_count": {
+										"value": "0",
+										"type": "Int32"
+									},
+									"ucm_document_id": {
+										"value": {
+											"value": "@variables('document_id')",
+											"type": "Expression"
+										},
+										"type": "String"
+									}
+								}
+							},
+							"linkedServiceName": {
+								"referenceName": "uis_df_sql_linked_service",
+								"type": "LinkedServiceReference"
+							}
+						},
+						{
+							"name": "Load and Import Bank Statement",
+							"type": "ExecutePipeline",
+							"dependsOn": [
+								{
+									"activity": "Load to UCM Logging",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "ftp_shared_submit_ess_job",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"baseUrl": {
+										"value": "@variables('base_url')",
+										"type": "Expression"
+									},
+									"payload": {
+										"value": "{\n  \"OperationName\": \"submitESSJobRequest\",\n  \"JobPackageName\": \"/oracle/apps/ess/financials/cashManagement/bankStatements\",\n  \"JobDefName\": \"BankStatementsProcessingForCloud\",\n  \"ESSParameters\": \"@{concat('BAI2 Format,#NULL,CE_BANK_STMT_BAI2,false,#NULL,', variables('document_id'))}\"\n}",
+										"type": "Expression"
+									}
+								}
+							}
+						},
+						{
+							"name": "upload_to_ucm",
+							"type": "ExecutePipeline",
+							"dependsOn": [
+								{
+									"activity": "base64_encode",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "ftp_shared_upload_to_ucm_pl",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"file_name": {
+										"value": "@item().name",
+										"type": "Expression"
+									},
+									"document_account": {
+										"value": "@variables('document_account')",
+										"type": "Expression"
+									},
+									"base64_content": {
+										"value": "@activity('base64_encode').output.encoded_string",
+										"type": "Expression"
+									}
+								}
+							}
+						},
+						{
+							"name": "Archive Statement",
+							"type": "Copy",
+							"dependsOn": [
+								{
+									"activity": "Load and Import Bank Statement",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "BinarySource",
+									"storeSettings": {
+										"type": "AzureBlobStorageReadSettings",
+										"recursive": true,
+										"wildcardFolderPath": "inbound/zip",
+										"wildcardFileName": {
+											"value": "@item().name",
+											"type": "Expression"
+										},
+										"deleteFilesAfterCompletion": true
+									},
+									"formatSettings": {
+										"type": "BinaryReadSettings"
+									}
+								},
+								"sink": {
+									"type": "BinarySink",
+									"storeSettings": {
+										"type": "AzureBlobStorageWriteSettings"
+									}
+								},
+								"enableStaging": false
+							},
+							"inputs": [
+								{
+									"referenceName": "df_barclays_statement_inbound_storage_container_dataset",
+									"type": "DatasetReference",
+									"parameters": {
+										"file_path": "inbound/zip"
+									}
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "df_barclays_statement_inbound_storage_container_dataset",
+									"type": "DatasetReference",
+									"parameters": {
+										"file_path": "inbound/archive"
+									}
+								}
+							]
+						},
+						{
+							"name": "base64_encode",
+							"type": "AzureFunctionActivity",
+							"dependsOn": [
+								{
+									"activity": "Logging Starts",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"functionName": "base64Encode",
+								"body": {
+									"value": "{\n    \"file_path\": \"@{concat('barclays/inbound/zip/', item().name)}\"\n}",
+									"type": "Expression"
+								},
+								"method": "POST"
+							},
+							"linkedServiceName": {
+								"referenceName": "uis_shared_process_function",
+								"type": "LinkedServiceReference"
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "List Zip",
+				"type": "GetMetadata",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"dataset": {
+						"referenceName": "df_barclays_statement_inbound_storage_container_dataset",
+						"type": "DatasetReference",
+						"parameters": {
+							"file_path": "inbound/zip/*.zip"
+						}
+					},
+					"fieldList": [
+						"childItems"
+					],
+					"storeSettings": {
+						"type": "AzureBlobStorageReadSettings",
+						"recursive": true,
+						"enablePartitionDiscovery": false
+					},
+					"formatSettings": {
+						"type": "BinaryReadSettings"
+					}
+				}
+			},
+			{
+				"name": "Catch Error 1",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Load And Import Bank Statements",
+						"dependencyConditions": [
+							"Failed",
+							"Skipped"
+						]
+					},
+					{
+						"activity": "List Zip",
+						"dependencyConditions": [
+							"Skipped",
+							"Completed"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "ErrorMsg",
+					"value": {
+						"value": "@activity('List Zip').output.error",
+						"type": "Expression"
+					}
+				}
+			}
+		],
+		"variables": {
+			"document_id": {
+				"type": "String"
+			},
+			"ErrorMsg": {
+				"type": "String"
+			},
+			"document_account": {
+				"type": "String",
+				"defaultValue": "fin$/cashManagement$/import$"
+			},
+			"base_url": {
+				"type": "String",
+				"defaultValue": "https://fa-evjk-dev5-saasfaprod1.fa.ocs.oraclecloud.com"
+			},
+			"ucm_endpoint": {
+				"type": "String",
+				"defaultValue": "/fscmRestApi/resources/11.13.18.05/erpintegrations"
+			}
+		},
+		"folder": {
+			"name": "df_barclays_to_fusion_bank_statements"
+		},
+		"annotations": [],
+		"lastPublishTime": "2026-02-06T11:27:06Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

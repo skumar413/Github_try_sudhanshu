@@ -1,0 +1,282 @@
+{
+	"name": "old_df_get_softco_invoices",
+	"properties": {
+		"activities": [
+			{
+				"name": "Login",
+				"type": "WebActivity",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "POST",
+					"url": "https://unicam-uat.softco.com/SoftCo.PublicBridge/api/v5/Authentication/Login",
+					"body": {
+						"isClientAnnounced": true,
+						"password": "d&/Xk3}BlGa2",
+						"userName": "apiuser"
+					}
+				}
+			},
+			{
+				"name": "SessionId",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Login",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "SessionId",
+					"value": {
+						"value": "@activity('Login').output.sessionId",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "List Doc Ids",
+				"type": "WebActivity",
+				"dependsOn": [
+					{
+						"activity": "SessionId",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "POST",
+					"headers": {
+						"Authorization": {
+							"value": "@concat('Basic sessionId= ',variables('SessionId'))",
+							"type": "Expression"
+						}
+					},
+					"url": "https://unicam-uat.softco.com/SoftCo.PublicBridge/api/v5/Ecmread/Indexes/A_api_data_1_139/IndexRows",
+					"body": {
+						"queryFields": [
+							{
+								"fldstatus": {
+									"criteria": [
+										{
+											"comparisonValues": [
+												"new"
+											],
+											"queryOperator": "Equals"
+										}
+									]
+								},
+								"messageType": {
+									"criteria": [
+										{
+											"comparisonValues": [
+												"invoiceExport"
+											],
+											"queryOperator": "Equals"
+										}
+									]
+								}
+							}
+						],
+						"sortColumn": "DocId"
+					}
+				}
+			},
+			{
+				"name": "Loop Doc Ids",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "List Doc Ids",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('List Doc Ids').output.queryResults",
+						"type": "Expression"
+					},
+					"isSequential": true,
+					"activities": [
+						{
+							"name": "Get Invoice",
+							"type": "WebActivity",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"method": "GET",
+								"headers": {
+									"Authorization": {
+										"value": "@concat('Basic sessionId= ',variables('SessionId'))",
+										"type": "Expression"
+									}
+								},
+								"url": {
+									"value": "@concat('https://unicam-uat.softco.com/SoftCo.PublicBridge/api/v5/Ecmread/Documents/',item().docId,'/Pages')",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "Base64 Decode",
+							"type": "AzureFunctionActivity",
+							"dependsOn": [
+								{
+									"activity": "Get Invoice",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"functionName": "base64Decode",
+								"body": {
+									"value": "@concat('{\"encoded_string\":\"', activity('Get Invoice').output.pages[0].docData, '\",\"target_path\":\"softco-to-fusion/inbound/softco_invoice_', formatDateTime(utcNow(), 'yyyyMMdd_HHmmss'), '.xml\"}')",
+									"type": "Expression"
+								},
+								"method": "POST"
+							},
+							"linkedServiceName": {
+								"referenceName": "uis_shared_process_function",
+								"type": "LinkedServiceReference"
+							}
+						},
+						{
+							"name": "Mark Invoices as Processed",
+							"type": "WebActivity",
+							"dependsOn": [
+								{
+									"activity": "Base64 Decode",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"method": "POST",
+								"headers": {
+									"Authorization": {
+										"value": "@concat('Basic sessionId= ',variables('SessionId'))",
+										"type": "Expression"
+									}
+								},
+								"url": "https://unicam-uat.softco.com/SoftCo.PublicBridge/api/v5/Ecmwrite/Indexes/A_api_data_1_139/IndexRows",
+								"body": {
+									"value": "{\n  \"changes\": [\n    {\n      \"ID\": null,\n      \"dataFields\": {\n        \"fldstatus\": \"processed\"\n      },\n      \"keyFields\": [\n        {\n          \"DocID\": \"@{item().docId}\"\n        }\n      ],\n      \"operation\": \"Modify\"\n    }\n  ]\n}",
+									"type": "Expression"
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "Logout",
+				"type": "WebActivity",
+				"dependsOn": [
+					{
+						"activity": "Loop Doc Ids",
+						"dependencyConditions": [
+							"Succeeded",
+							"Skipped",
+							"Failed"
+						]
+					},
+					{
+						"activity": "SessionId",
+						"dependencyConditions": [
+							"Skipped",
+							"Completed"
+						]
+					},
+					{
+						"activity": "List Doc Ids",
+						"dependencyConditions": [
+							"Skipped",
+							"Completed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "POST",
+					"url": "https://unicam-uat.softco.com/SoftCo.PublicBridge/api/v5/Authentication/Logout",
+					"body": {
+						"value": "{\n  \"sessionId\": \"@{variables('SessionId')}\"\n}",
+						"type": "Expression"
+					}
+				}
+			}
+		],
+		"variables": {
+			"SessionId": {
+				"type": "String"
+			},
+			"test": {
+				"type": "String"
+			}
+		},
+		"folder": {
+			"name": "df_softco_to_fusion_ap_invoice"
+		},
+		"annotations": [],
+		"lastPublishTime": "2026-03-20T16:43:09Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

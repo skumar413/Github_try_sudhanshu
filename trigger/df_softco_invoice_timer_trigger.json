@@ -1,0 +1,34 @@
+{
+	"name": "df_softco_invoice_timer_trigger",
+	"properties": {
+		"annotations": [],
+		"runtimeState": "Started",
+		"pipelines": [
+			{
+				"pipelineReference": {
+					"referenceName": "df_get_softco_ap_invoices",
+					"type": "PipelineReference"
+				},
+				"parameters": {
+					"p_source_system": "SoftCo",
+					"p_entity_name": "SoftCo AP Invoice",
+					"p_softco_base_url": "https://unicam-uat.softco.com",
+					"p_softco_status_filter": "new",
+					"p_post_extract_status": "extracted",
+					"p_start_processing_after_extract": true,
+					"p_bip_report_name": "AP Invoice Reconciliation BIP",
+					"p_inbound_folder": "inbound"
+				}
+			}
+		],
+		"type": "ScheduleTrigger",
+		"typeProperties": {
+			"recurrence": {
+				"frequency": "Minute",
+				"interval": 30,
+				"startTime": "2026-03-27T18:53:00",
+				"timeZone": "GMT Standard Time"
+			}
+		}
+	}
+}

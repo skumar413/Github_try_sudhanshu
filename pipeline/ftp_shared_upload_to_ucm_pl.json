@@ -1,0 +1,161 @@
+{
+	"name": "ftp_shared_upload_to_ucm_pl",
+	"properties": {
+		"activities": [
+			{
+				"name": "Load To UCM",
+				"type": "WebActivity",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 2,
+					"retryIntervalInSeconds": 60,
+					"secureOutput": false,
+					"secureInput": true
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "POST",
+					"headers": {
+						"Content-Type": "application/vnd.oracle.adf.resourceitem+json"
+					},
+					"relativeUrl": {
+						"value": "@variables('submit_endpoint')",
+						"type": "Expression"
+					},
+					"body": {
+						"value": "{\n    \"OperationName\": \"uploadFileToUCM\",\n    \"DocumentContent\": \"@{pipeline().parameters.base64_content}\",\n    \"DocumentAccount\": \"@{pipeline().parameters.document_account}\",\n    \"ContentType\": \"zip\",\n    \"FileName\": \"@{pipeline().parameters.file_name}\",\n    \"DocumentId\": null\n}",
+						"type": "Expression"
+					}
+				},
+				"linkedServiceName": {
+					"referenceName": "uis_fusion_base_url_linked_service",
+					"type": "LinkedServiceReference"
+				}
+			},
+			{
+				"name": "Fail UCM Upload",
+				"type": "Fail",
+				"dependsOn": [
+					{
+						"activity": "Load To UCM",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"message": "Upload to Oracle UCM failed.",
+					"errorCode": "UCM_UPLOAD_FAILED"
+				}
+			},
+			{
+				"name": "Capture document_id",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Load To UCM",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "document_id",
+					"value": {
+						"value": "@string(coalesce(activity('Load To UCM').output.DocumentId, ''))",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Validate document_id",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "Capture document_id",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@and(greater(length(trim(variables('document_id'))), 0), not(equals(toLower(trim(variables('document_id'))), 'null')))",
+						"type": "Expression"
+					},
+					"ifFalseActivities": [
+						{
+							"name": "Fail Missing document_id",
+							"type": "Fail",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"message": "Oracle UCM upload completed but no DocumentId was returned.",
+								"errorCode": "UCM_DOCUMENT_ID_MISSING"
+							}
+						}
+					],
+					"ifTrueActivities": [
+						{
+							"name": "Set document_id",
+							"type": "SetVariable",
+							"dependsOn": [],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "pipelineReturnValue",
+								"value": [
+									{
+										"key": "document_id",
+										"value": {
+											"type": "Expression",
+											"content": "@variables('document_id')"
+										}
+									}
+								],
+								"setSystemVariable": true
+							}
+						}
+					]
+				}
+			}
+		],
+		"parameters": {
+			"file_name": {
+				"type": "string"
+			},
+			"document_account": {
+				"type": "string"
+			},
+			"base64_content": {
+				"type": "string"
+			}
+		},
+		"variables": {
+			"document_id": {
+				"type": "String"
+			},
+			"submit_endpoint": {
+				"type": "String",
+				"defaultValue": "/fscmRestApi/resources/11.13.18.05/erpintegrations"
+			}
+		},
+		"folder": {
+			"name": "df_ftp_shared_pipelines"
+		},
+		"annotations": [],
+		"lastPublishTime": "2026-03-27T15:30:15Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

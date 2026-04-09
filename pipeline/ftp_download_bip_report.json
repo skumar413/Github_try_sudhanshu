@@ -1,0 +1,617 @@
+{
+	"name": "ftp_download_bip_report",
+	"properties": {
+		"activities": [
+			{
+				"name": "Logging Start",
+				"type": "Script",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "@concat('INSERT INTO [dbo].[tbl_integration_transaction_log] ([pipeline_name],[pipeline_run_id],[activity_name],[activity_type],[step_name],[execution_status],[severity],[source_system],[target_system],[entity_name],[object_name],[business_key],[correlation_id],[file_name],[doc_id],[message],[error_code],[error_message],[start_time_utc],[end_time_utc],[created_by],[created_at_utc],[document_id],[status],[success_flag],[created_at],[updated_at]) VALUES (''', pipeline().Pipeline, ''',''', pipeline().RunId, ''',''Logging Start'',''Script'',''Initialize BIP report download logging'',''InProgress'',''Info'',''Oracle BIP'',''Blob Storage'',''Oracle BIP Report Download'',''', pipeline().parameters.targetDirectory, ''',''', pipeline().parameters.targetDirectory, ''',''', pipeline().RunId, ''',''', pipeline().parameters.targetDirectory, ''',NULL,''BIP report download started.'',NULL,NULL,SYSUTCDATETIME(),SYSUTCDATETIME(),''ADF'',SYSUTCDATETIME(),NULL,''in-progress'',NULL,GETDATE(),GETDATE())')",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			},
+			{
+				"name": "Call BIP ESS Job",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Logging Start",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": true
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "ftp_shared_submit_ess_job",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"payload": {
+							"value": "@pipeline().parameters.payload",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "Log ESS Child Failure",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "Call BIP ESS Job",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "@concat('INSERT INTO [dbo].[tbl_integration_transaction_log] ([pipeline_name],[pipeline_run_id],[activity_name],[activity_type],[step_name],[execution_status],[severity],[source_system],[target_system],[entity_name],[object_name],[business_key],[correlation_id],[file_name],[doc_id],[message],[error_code],[error_message],[start_time_utc],[end_time_utc],[created_by],[created_at_utc],[document_id],[status],[success_flag],[created_at],[updated_at]) VALUES (''', pipeline().Pipeline, ''',''', pipeline().RunId, ''',''Log ESS Child Failure'',''Script'',''Call shared ESS child pipeline'',''Failed'',''Error'',''Oracle BIP'',''Blob Storage'',''Oracle BIP Report Download'',''BIP ESS Execution'',''', pipeline().parameters.targetDirectory, ''',''', pipeline().RunId, ''',''', pipeline().parameters.targetDirectory, ''',NULL,''Shared ESS child pipeline failed.'',''BIP_ESS_CHILD_FAILED'',''Shared ESS child pipeline failed.'',SYSUTCDATETIME(),SYSUTCDATETIME(),''ADF'',SYSUTCDATETIME(),NULL,''failed-ess-child-pipeline'',0,GETDATE(),GETDATE())')",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			},
+			{
+				"name": "Fail ESS Child Pipeline",
+				"type": "Fail",
+				"dependsOn": [
+					{
+						"activity": "Log ESS Child Failure",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"message": "Shared ESS child pipeline failed.",
+					"errorCode": "BIP_ESS_CHILD_FAILED"
+				}
+			},
+			{
+				"name": "Validate ESS Result",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "Call BIP ESS Job",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@and(equals(activity('Call BIP ESS Job').output.pipelineReturnValue.final_status, 'SUCCEEDED'), and(greater(length(trim(string(coalesce(activity('Call BIP ESS Job').output.pipelineReturnValue.process_id, '')))), 0), not(equals(toLower(trim(string(coalesce(activity('Call BIP ESS Job').output.pipelineReturnValue.process_id, '')))), 'null'))))",
+						"type": "Expression"
+					},
+					"ifFalseActivities": [
+						{
+							"name": "Log Invalid ESS Result",
+							"type": "Script",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"linkedServiceName": {
+								"referenceName": "uis_df_sql_linked_service",
+								"type": "LinkedServiceReference"
+							},
+							"typeProperties": {
+								"scripts": [
+									{
+										"type": "NonQuery",
+										"text": {
+											"value": "@concat('INSERT INTO [dbo].[tbl_integration_transaction_log] ([pipeline_name],[pipeline_run_id],[activity_name],[activity_type],[step_name],[execution_status],[severity],[source_system],[target_system],[entity_name],[object_name],[business_key],[correlation_id],[file_name],[doc_id],[message],[error_code],[error_message],[start_time_utc],[end_time_utc],[created_by],[created_at_utc],[document_id],[status],[success_flag],[created_at],[updated_at]) VALUES (''', pipeline().Pipeline, ''',''', pipeline().RunId, ''',''Log Invalid ESS Result'',''Script'',''Validate ESS Result'',''Failed'',''Error'',''Oracle BIP'',''Blob Storage'',''Oracle BIP Report Download'',''BIP ESS Validation'',''', pipeline().parameters.targetDirectory, ''',''', pipeline().RunId, ''',''', pipeline().parameters.targetDirectory, ''',NULL,''BIP ESS job did not return a successful final status and valid process id.'',''BIP_ESS_INVALID_RESULT'',''', activity('Call BIP ESS Job').output.pipelineReturnValue.final_status, ''',SYSUTCDATETIME(),SYSUTCDATETIME(),''ADF'',SYSUTCDATETIME(),NULL,''failed-invalid-ess-result'',0,GETDATE(),GETDATE())')",
+											"type": "Expression"
+										}
+									}
+								],
+								"scriptBlockExecutionTimeout": "02:00:00"
+							}
+						},
+						{
+							"name": "BIP Job Failed",
+							"type": "Fail",
+							"dependsOn": [
+								{
+									"activity": "Log Invalid ESS Result",
+									"dependencyConditions": [
+										"Completed"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"message": "BIP ESS job did not return a successful final status and valid process id.",
+								"errorCode": "BIP_ESS_INVALID_RESULT"
+							}
+						}
+					],
+					"ifTrueActivities": [
+						{
+							"name": "Set encoded file name",
+							"type": "SetVariable",
+							"dependsOn": [],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "encoded_document",
+								"value": {
+									"value": "@concat('encoded_',pipeline().RunId,'_',formatDateTime(utcNow(), 'yyyyMMddHHmmss'),'.json')",
+									"type": "Expression"
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "Log Document Fetch Failure",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "download encoded file",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "@concat('INSERT INTO [dbo].[tbl_integration_transaction_log] ([pipeline_name],[pipeline_run_id],[activity_name],[activity_type],[step_name],[execution_status],[severity],[source_system],[target_system],[entity_name],[object_name],[business_key],[correlation_id],[file_name],[doc_id],[message],[error_code],[error_message],[start_time_utc],[end_time_utc],[created_by],[created_at_utc],[document_id],[status],[success_flag],[created_at],[updated_at]) VALUES (''', pipeline().Pipeline, ''',''', pipeline().RunId, ''',''Log Document Fetch Failure'',''Script'',''Fetch BIP document content'',''Failed'',''Error'',''Oracle BIP'',''Blob Storage'',''Oracle BIP Report Download'',''', pipeline().parameters.targetDirectory, ''',''', activity('Call BIP ESS Job').output.pipelineReturnValue.process_id, ''',''', pipeline().RunId, ''',''', pipeline().parameters.targetDirectory, ''',''', activity('Call BIP ESS Job').output.pipelineReturnValue.process_id, ''',''Failed to fetch BIP document content.'',''BIP_DOCUMENT_FETCH_FAILED'',''Failed to fetch BIP document content.'',SYSUTCDATETIME(),SYSUTCDATETIME(),''ADF'',SYSUTCDATETIME(),''', activity('Call BIP ESS Job').output.pipelineReturnValue.process_id, ''',''failed-document-fetch'',0,GETDATE(),GETDATE())')",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			},
+			{
+				"name": "Fail Document Fetch",
+				"type": "Fail",
+				"dependsOn": [
+					{
+						"activity": "Log Document Fetch Failure",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"message": "Failed to fetch BIP document content.",
+					"errorCode": "BIP_DOCUMENT_FETCH_FAILED"
+				}
+			},
+			{
+				"name": "Azure Decode Function",
+				"type": "AzureFunctionActivity",
+				"dependsOn": [
+					{
+						"activity": "download encoded file",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 2,
+					"retryIntervalInSeconds": 60,
+					"secureOutput": false,
+					"secureInput": true
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"functionName": "base64Decode",
+					"body": {
+						"value": "{\n  \"encoded_blob_path\": \"common/encoded/@{variables('encoded_document')}\",\n  \"target_path\": \"@{concat(pipeline().parameters.targetDirectory, '/', 'Report.zip')}\"\n}",
+						"type": "Expression"
+					},
+					"method": "POST"
+				},
+				"linkedServiceName": {
+					"referenceName": "uis_shared_process_function",
+					"type": "LinkedServiceReference"
+				}
+			},
+			{
+				"name": "Log Decode Failure",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "Azure Decode Function",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "@concat('INSERT INTO [dbo].[tbl_integration_transaction_log] ([pipeline_name],[pipeline_run_id],[activity_name],[activity_type],[step_name],[execution_status],[severity],[source_system],[target_system],[entity_name],[object_name],[business_key],[correlation_id],[file_name],[doc_id],[message],[error_code],[error_message],[start_time_utc],[end_time_utc],[created_by],[created_at_utc],[document_id],[status],[success_flag],[created_at],[updated_at]) VALUES (''', pipeline().Pipeline, ''',''', pipeline().RunId, ''',''Log Decode Failure'',''Script'',''Decode BIP report archive'',''Failed'',''Error'',''Oracle BIP'',''Blob Storage'',''Oracle BIP Report Download'',''', concat(pipeline().parameters.targetDirectory, '/', 'Report.zip'), ''',''', activity('Call BIP ESS Job').output.pipelineReturnValue.process_id, ''',''', pipeline().RunId, ''',''', concat(pipeline().parameters.targetDirectory, '/', 'Report.zip'), ''',''', activity('Call BIP ESS Job').output.pipelineReturnValue.process_id, ''',''Failed to decode BIP report archive.'',''BIP_DECODE_FAILED'',''Failed to decode BIP report archive.'',SYSUTCDATETIME(),SYSUTCDATETIME(),''ADF'',SYSUTCDATETIME(),''', activity('Call BIP ESS Job').output.pipelineReturnValue.process_id, ''',''failed-decode'',0,GETDATE(),GETDATE())')",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			},
+			{
+				"name": "Fail Decode",
+				"type": "Fail",
+				"dependsOn": [
+					{
+						"activity": "Log Decode Failure",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"message": "Failed to decode BIP report archive.",
+					"errorCode": "BIP_DECODE_FAILED"
+				}
+			},
+			{
+				"name": "Azure Unzip Function",
+				"type": "AzureFunctionActivity",
+				"dependsOn": [
+					{
+						"activity": "Azure Decode Function",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 2,
+					"retryIntervalInSeconds": 60,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"functionName": "unzip",
+					"body": {
+						"value": "{\n  \"source_path\": \"@{concat(pipeline().parameters.targetDirectory, '/', 'Report.zip')}\",\n  \"target_path\": \"@{concat(pipeline().parameters.targetDirectory, '/', 'Report/')}\"\n}",
+						"type": "Expression"
+					},
+					"method": "POST"
+				},
+				"linkedServiceName": {
+					"referenceName": "uis_shared_process_function",
+					"type": "LinkedServiceReference"
+				}
+			},
+			{
+				"name": "Log Unzip Failure",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "Azure Unzip Function",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "@concat('INSERT INTO [dbo].[tbl_integration_transaction_log] ([pipeline_name],[pipeline_run_id],[activity_name],[activity_type],[step_name],[execution_status],[severity],[source_system],[target_system],[entity_name],[object_name],[business_key],[correlation_id],[file_name],[doc_id],[message],[error_code],[error_message],[start_time_utc],[end_time_utc],[created_by],[created_at_utc],[document_id],[status],[success_flag],[created_at],[updated_at]) VALUES (''', pipeline().Pipeline, ''',''', pipeline().RunId, ''',''Log Unzip Failure'',''Script'',''Unzip BIP report archive'',''Failed'',''Error'',''Oracle BIP'',''Blob Storage'',''Oracle BIP Report Download'',''', concat(pipeline().parameters.targetDirectory, '/', 'Report/'), ''',''', activity('Call BIP ESS Job').output.pipelineReturnValue.process_id, ''',''', pipeline().RunId, ''',''', concat(pipeline().parameters.targetDirectory, '/', 'Report/'), ''',''', activity('Call BIP ESS Job').output.pipelineReturnValue.process_id, ''',''Failed to unzip BIP report archive.'',''BIP_UNZIP_FAILED'',''Failed to unzip BIP report archive.'',SYSUTCDATETIME(),SYSUTCDATETIME(),''ADF'',SYSUTCDATETIME(),''', activity('Call BIP ESS Job').output.pipelineReturnValue.process_id, ''',''failed-unzip'',0,GETDATE(),GETDATE())')",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			},
+			{
+				"name": "Fail Unzip",
+				"type": "Fail",
+				"dependsOn": [
+					{
+						"activity": "Log Unzip Failure",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"message": "Failed to unzip BIP report archive.",
+					"errorCode": "BIP_UNZIP_FAILED"
+				}
+			},
+			{
+				"name": "Log Download Success",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "Azure Unzip Function",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "@concat('INSERT INTO [dbo].[tbl_integration_transaction_log] ([pipeline_name],[pipeline_run_id],[activity_name],[activity_type],[step_name],[execution_status],[severity],[source_system],[target_system],[entity_name],[object_name],[business_key],[correlation_id],[file_name],[doc_id],[message],[error_code],[error_message],[start_time_utc],[end_time_utc],[created_by],[created_at_utc],[document_id],[status],[success_flag],[created_at],[updated_at]) VALUES (''', pipeline().Pipeline, ''',''', pipeline().RunId, ''',''Log Download Success'',''Script'',''Complete BIP report download'',''Succeeded'',''Info'',''Oracle BIP'',''Blob Storage'',''Oracle BIP Report Download'',''', concat(pipeline().parameters.targetDirectory, '/', 'Report/'), ''',''', activity('Call BIP ESS Job').output.pipelineReturnValue.process_id, ''',''', pipeline().RunId, ''',''', concat('ESS_O_', activity('Call BIP ESS Job').output.pipelineReturnValue.process_id, '_BIP.csv'), ''',''', activity('Call BIP ESS Job').output.pipelineReturnValue.process_id, ''',''BIP report downloaded and extracted successfully.'',NULL,NULL,SYSUTCDATETIME(),SYSUTCDATETIME(),''ADF'',SYSUTCDATETIME(),''', activity('Call BIP ESS Job').output.pipelineReturnValue.process_id, ''',''completed'',1,GETDATE(),GETDATE())')",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			},
+			{
+				"name": "Set Output File Name",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Log Download Success",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "pipelineReturnValue",
+					"value": [
+						{
+							"key": "file_name",
+							"value": {
+								"type": "Expression",
+								"content": "@concat('ESS_O_', activity('Call BIP ESS Job').output.pipelineReturnValue.process_id, '_BIP.csv')"
+							}
+						},
+						{
+							"key": "final_status",
+							"value": {
+								"type": "Expression",
+								"content": "@activity('Call BIP ESS Job').output.pipelineReturnValue.final_status"
+							}
+						},
+						{
+							"key": "process_id",
+							"value": {
+								"type": "Expression",
+								"content": "@activity('Call BIP ESS Job').output.pipelineReturnValue.process_id"
+							}
+						}
+					],
+					"setSystemVariable": true
+				}
+			},
+			{
+				"name": "download encoded file",
+				"type": "Copy",
+				"dependsOn": [
+					{
+						"activity": "Validate ESS Result",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "RestSource",
+						"httpRequestTimeout": "00:10:40",
+						"requestInterval": "00.00:00:00.010",
+						"requestMethod": "GET",
+						"paginationRules": {
+							"supportRFC5988": "true"
+						}
+					},
+					"sink": {
+						"type": "JsonSink",
+						"storeSettings": {
+							"type": "AzureBlobStorageWriteSettings"
+						},
+						"formatSettings": {
+							"type": "JsonWriteSettings"
+						}
+					},
+					"enableStaging": false,
+					"translator": {
+						"type": "TabularTranslator",
+						"mappings": [
+							{
+								"source": {
+									"path": "['DocumentContent']"
+								},
+								"sink": {
+									"path": "['DocumentContent']"
+								}
+							}
+						],
+						"collectionReference": "$['items']"
+					}
+				},
+				"inputs": [
+					{
+						"referenceName": "common_rest_dataset",
+						"type": "DatasetReference",
+						"parameters": {
+							"relative_url": {
+								"value": "@concat(variables('document_endpoint'), activity('Call BIP ESS Job').output.pipelineReturnValue.process_id, ',fileType=ALL')",
+								"type": "Expression"
+							}
+						}
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "common_lookup_json",
+						"type": "DatasetReference",
+						"parameters": {
+							"folder_name": "encoded",
+							"file_name": {
+								"value": "@variables('encoded_document')",
+								"type": "Expression"
+							}
+						}
+					}
+				]
+			}
+		],
+		"parameters": {
+			"payload": {
+				"type": "string"
+			},
+			"targetDirectory": {
+				"type": "String"
+			}
+		},
+		"variables": {
+			"DocumentContent": {
+				"type": "String"
+			},
+			"document_endpoint": {
+				"type": "String",
+				"defaultValue": "/fscmRestApi/resources/11.13.18.05/erpintegrations?finder=ESSJobExecutionDetailsRF;requestId="
+			},
+			"shared_function_base_url": {
+				"type": "String",
+				"defaultValue": "https://poc-test-app-new.azurewebsites.net"
+			},
+			"encoded_document": {
+				"type": "String"
+			}
+		},
+		"folder": {
+			"name": "df_ftp_shared_pipelines"
+		},
+		"annotations": [],
+		"lastPublishTime": "2026-03-27T15:48:49Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

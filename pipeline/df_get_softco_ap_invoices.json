@@ -1,0 +1,654 @@
+{
+	"name": "df_get_softco_ap_invoices",
+	"properties": {
+		"activities": [
+			{
+				"name": "Set Pipeline Start Time",
+				"type": "SetVariable",
+				"dependsOn": [],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "pipeline_start_utc",
+					"value": {
+						"value": "@utcNow()",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Set Batch Id",
+				"type": "SetVariable",
+				"dependsOn": [],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "batch_id",
+					"value": {
+						"value": "@guid()",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Create Batch Record",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "Set Pipeline Start Time",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Set Batch Id",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.01:00:00",
+					"retry": 1,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "@concat('INSERT INTO [dbo].[tbl_integration_batch] ([batch_id],[source_system],[entity_name],[orchestrator_pipeline_name],[orchestrator_run_id],[batch_status],[current_stage],[started_at_utc],[created_at_utc],[updated_at_utc]) VALUES (TRY_CONVERT(uniqueidentifier, ''', variables('batch_id'), '''), ''', pipeline().parameters.p_source_system, ''', ''', pipeline().parameters.p_entity_name, ''', ''', pipeline().Pipeline, ''', ''', pipeline().RunId, ''', ''Started'', ''Get Source Files'', TRY_CAST(''', variables('pipeline_start_utc'), ''' AS datetime2), SYSUTCDATETIME(), SYSUTCDATETIME())')",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "00:30:00"
+				}
+			},
+			{
+				"name": "Log Pipeline Start",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "Create Batch Record",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.01:00:00",
+					"retry": 1,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "@concat('UPDATE [dbo].[tbl_integration_batch] SET [current_stage] = ''Get Source Files'', [batch_status] = ''Extracting'', [updated_at_utc] = SYSUTCDATETIME() WHERE [batch_id] = TRY_CONVERT(uniqueidentifier, ''', variables('batch_id'), ''');')",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "00:30:00"
+				}
+			},
+			{
+				"name": "SessionId",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Login",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": true,
+					"secureInput": true
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "SessionId",
+					"value": {
+						"value": "@activity('Login').output.sessionId",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Log Listed Count",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "List Doc Ids",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.01:00:00",
+					"retry": 1,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "@concat('UPDATE [dbo].[tbl_integration_batch] SET [source_document_count] = ', string(length(activity('List Doc Ids').output.queryResults)), ', [updated_at_utc] = SYSUTCDATETIME() WHERE [batch_id] = TRY_CONVERT(uniqueidentifier, ''', variables('batch_id'), ''');')",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "00:30:00"
+				}
+			},
+			{
+				"name": "Loop Doc Ids",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "List Doc Ids",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('List Doc Ids').output.queryResults",
+						"type": "Expression"
+					},
+					"isSequential": true,
+					"activities": [
+						{
+							"name": "Base64 Decode",
+							"type": "AzureFunctionActivity",
+							"dependsOn": [
+								{
+									"activity": "Get Invoice",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.04:00:00",
+								"retry": 1,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": true
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"functionName": "base64Decode",
+								"body": {
+									"value": "@concat('{\"encoded_string\":\"', activity('Get Invoice').output.pages[0].docData, '\",\"target_path\":\"softco-to-fusion/', pipeline().parameters.p_inbound_folder, '/', variables('batch_id'), '/softco_invoice_', string(item().docId), '.xml\"}')",
+									"type": "Expression"
+								},
+								"method": "POST"
+							},
+							"linkedServiceName": {
+								"referenceName": "uis_shared_process_function",
+								"type": "LinkedServiceReference"
+							}
+						},
+						{
+							"name": "Get Invoice",
+							"type": "WebActivity",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"method": "GET",
+								"headers": {
+									"Authorization": {
+										"value": "@concat('Basic sessionId= ',variables('SessionId'))",
+										"type": "Expression"
+									}
+								},
+								"url": {
+									"value": "@concat('https://unicam-uat.softco.com/SoftCo.PublicBridge/api/v5/Ecmread/Documents/',item().docId,'/Pages')",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "Mark Invoices as Processed",
+							"type": "WebActivity",
+							"dependsOn": [
+								{
+									"activity": "Base64 Decode",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"method": "POST",
+								"headers": {
+									"Authorization": {
+										"value": "@concat('Basic sessionId= ',variables('SessionId'))",
+										"type": "Expression"
+									}
+								},
+								"url": "https://unicam-uat.softco.com/SoftCo.PublicBridge/api/v5/Ecmwrite/Indexes/A_api_data_1_139/IndexRows",
+								"body": {
+									"value": "@concat('{\"changes\":[{\"ID\":null,\"dataFields\":{\"fldstatus\":\"processed\"},\"keyFields\":[{\"DocID\":\"', string(item().docId), '\"}],\"operation\":\"Modify\"}]}')",
+									"type": "Expression"
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "Log Pipeline Result",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "Logout",
+						"dependencyConditions": [
+							"Succeeded",
+							"Skipped",
+							"Failed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.01:00:00",
+					"retry": 1,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "@concat('UPDATE [dbo].[tbl_integration_batch] SET [source_file_count] = ', string(length(activity('List Doc Ids').output.queryResults)), ', [batch_status] = CASE WHEN ', string(length(activity('List Doc Ids').output.queryResults)), ' = 0 THEN ''No Files'' ELSE ''Extracted Ready For Processing'' END, [current_stage] = CASE WHEN ', string(length(activity('List Doc Ids').output.queryResults)), ' = 0 THEN ''No Files To Process'' ELSE ''Source Files Ready'' END, [updated_at_utc] = SYSUTCDATETIME() WHERE [batch_id] = TRY_CONVERT(uniqueidentifier, ''', variables('batch_id'), ''');')",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "00:30:00"
+				}
+			},
+			{
+				"name": "Should Start Processing",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "Log Pipeline Result",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@and(pipeline().parameters.p_start_processing_after_extract, greater(length(activity('List Doc Ids').output.queryResults), 0))",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "Load Raw Tables",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"policy": {
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "df_insert_invoices_to_raw_tables",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"p_batch_id": {
+										"value": "@variables('batch_id')",
+										"type": "Expression"
+									},
+									"p_source_system": {
+										"value": "@pipeline().parameters.p_source_system",
+										"type": "Expression"
+									},
+									"p_entity_name": {
+										"value": "@pipeline().parameters.p_entity_name",
+										"type": "Expression"
+									}
+								}
+							}
+						},
+						{
+							"name": "Promote To Staging",
+							"type": "ExecutePipeline",
+							"dependsOn": [
+								{
+									"activity": "Load Raw Tables",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "df_promote_softco_ap_invoice_to_staging",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"p_batch_id": {
+										"value": "@variables('batch_id')",
+										"type": "Expression"
+									},
+									"p_source_system": {
+										"value": "@pipeline().parameters.p_source_system",
+										"type": "Expression"
+									},
+									"p_entity_name": {
+										"value": "@pipeline().parameters.p_entity_name",
+										"type": "Expression"
+									}
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "Get Username",
+				"type": "WebActivity",
+				"dependsOn": [
+					{
+						"activity": "Log Pipeline Start",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "GET",
+					"url": "https://uis-kv-integ-poc-uks-001.vault.azure.net/secrets/softco-ap-username/8efa6d105def4135bba6c0488921af2e?api-version=7.5",
+					"authentication": {
+						"type": "MSI",
+						"resource": "https://vault.azure.net"
+					}
+				}
+			},
+			{
+				"name": "Get Password",
+				"type": "WebActivity",
+				"dependsOn": [
+					{
+						"activity": "Log Pipeline Start",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "GET",
+					"url": "https://uis-kv-integ-poc-uks-001.vault.azure.net/secrets/softco-ap-password/a97d2c9b2ad84d398b24a65b83780cc6?api-version=7.5",
+					"authentication": {
+						"type": "MSI",
+						"resource": "https://vault.azure.net"
+					}
+				}
+			},
+			{
+				"name": "Login",
+				"type": "WebActivity",
+				"dependsOn": [
+					{
+						"activity": "Get Username",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Get Password",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "POST",
+					"url": "https://unicam-uat.softco.com/SoftCo.PublicBridge/api/v5/Authentication/Login",
+					"body": {
+						"value": "@concat('{\"userName\":\"', activity('Get Username').output.value, '\",\"password\":\"', activity('Get Password').output.value, '\",\"isClientAnnounced\":true}')",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "List Doc Ids",
+				"type": "WebActivity",
+				"dependsOn": [
+					{
+						"activity": "SessionId",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "POST",
+					"headers": {
+						"Authorization": {
+							"value": "@concat('Basic sessionId= ',variables('SessionId'))",
+							"type": "Expression"
+						}
+					},
+					"url": "https://unicam-uat.softco.com/SoftCo.PublicBridge/api/v5/Ecmread/Indexes/A_api_data_1_139/IndexRows",
+					"body": {
+						"queryFields": [
+							{
+								"fldstatus": {
+									"criteria": [
+										{
+											"comparisonValues": [
+												"new"
+											],
+											"queryOperator": "Equals"
+										}
+									]
+								},
+								"messageType": {
+									"criteria": [
+										{
+											"comparisonValues": [
+												"invoiceExport"
+											],
+											"queryOperator": "Equals"
+										}
+									]
+								}
+							}
+						],
+						"sortColumn": "DocId"
+					}
+				}
+			},
+			{
+				"name": "Logout",
+				"type": "WebActivity",
+				"dependsOn": [
+					{
+						"activity": "Loop Doc Ids",
+						"dependencyConditions": [
+							"Skipped",
+							"Succeeded",
+							"Failed"
+						]
+					},
+					{
+						"activity": "SessionId",
+						"dependencyConditions": [
+							"Skipped",
+							"Completed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "POST",
+					"url": "https://unicam-uat.softco.com/SoftCo.PublicBridge/api/v5/Authentication/Logout",
+					"body": {
+						"value": "{\n  \"sessionId\": \"@{variables('SessionId')}\"\n}",
+						"type": "Expression"
+					}
+				}
+			}
+		],
+		"parameters": {
+			"p_source_system": {
+				"type": "String",
+				"defaultValue": "SoftCo"
+			},
+			"p_entity_name": {
+				"type": "String",
+				"defaultValue": "AP Invoice"
+			},
+			"p_softco_base_url": {
+				"type": "String",
+				"defaultValue": "https://unicam-uat.softco.com/SoftCo.PublicBridge/api/v5/Authentication/Login"
+			},
+			"p_softco_status_filter": {
+				"type": "String",
+				"defaultValue": "new"
+			},
+			"p_post_extract_status": {
+				"type": "String",
+				"defaultValue": "extracted"
+			},
+			"p_start_processing_after_extract": {
+				"type": "Bool",
+				"defaultValue": true
+			},
+			"p_bip_report_name": {
+				"type": "String",
+				"defaultValue": "AP Invoice Reconciliation BIP"
+			},
+			"p_inbound_folder": {
+				"type": "String",
+				"defaultValue": "inbound"
+			}
+		},
+		"variables": {
+			"batch_id": {
+				"type": "String"
+			},
+			"SessionId": {
+				"type": "String"
+			},
+			"pipeline_start_utc": {
+				"type": "String"
+			}
+		},
+		"folder": {
+			"name": "df_softco_to_fusion_ap_invoice_inbound_integration (IN-04)/stage1 - to be triggered every 30 mins"
+		},
+		"annotations": [],
+		"lastPublishTime": "2026-04-02T18:38:53Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

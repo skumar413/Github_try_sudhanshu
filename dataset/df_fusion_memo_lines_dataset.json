@@ -1,0 +1,91 @@
+{
+	"name": "df_fusion_memo_lines_dataset",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "uis_df_storage_linked_service",
+			"type": "LinkedServiceReference"
+		},
+		"parameters": {
+			"folder_name": {
+				"type": "string"
+			},
+			"file_name": {
+				"type": "string"
+			}
+		},
+		"folder": {
+			"name": "df_fusion_memo_lines_datasets"
+		},
+		"annotations": [],
+		"type": "DelimitedText",
+		"typeProperties": {
+			"location": {
+				"type": "AzureBlobStorageLocation",
+				"fileName": {
+					"value": "@dataset().file_name",
+					"type": "Expression"
+				},
+				"folderPath": {
+					"value": "@dataset().folder_name",
+					"type": "Expression"
+				},
+				"container": "fusion-memo-lines"
+			},
+			"columnDelimiter": ",",
+			"escapeChar": "\\",
+			"firstRowAsHeader": true,
+			"quoteChar": "\""
+		},
+		"schema": [
+			{
+				"name": "MEMO_LINE_ID",
+				"type": "String"
+			},
+			{
+				"name": "NAME",
+				"type": "String"
+			},
+			{
+				"name": "DESCRIPTION",
+				"type": "String"
+			},
+			{
+				"name": "FROMDATE",
+				"type": "String"
+			},
+			{
+				"name": "TODATE",
+				"type": "String"
+			},
+			{
+				"name": "TYPE",
+				"type": "String"
+			},
+			{
+				"name": "TAXCLASSIFICATION",
+				"type": "String"
+			},
+			{
+				"name": "TAXPRODUCTCATEGORY",
+				"type": "String"
+			},
+			{
+				"name": "BUSINESSUNITNAME",
+				"type": "String"
+			},
+			{
+				"name": "REVENUEACCOUNT",
+				"type": "String"
+			},
+			{
+				"name": "CREATIONDATE",
+				"type": "String"
+			},
+			{
+				"name": "LASTUPDATEDATE",
+				"type": "String"
+			}
+		]
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}

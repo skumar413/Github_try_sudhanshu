@@ -1,0 +1,22 @@
+{
+	"name": "df_barclays_statement_inbound_sftp_dataset",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "uis_df_storage_linked_service",
+			"type": "LinkedServiceReference"
+		},
+		"folder": {
+			"name": "df_barclays_statement_inbound_datasets"
+		},
+		"annotations": [],
+		"type": "Binary",
+		"typeProperties": {
+			"location": {
+				"type": "AzureBlobStorageLocation",
+				"folderPath": "mock-sftp",
+				"container": "barclays"
+			}
+		}
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}

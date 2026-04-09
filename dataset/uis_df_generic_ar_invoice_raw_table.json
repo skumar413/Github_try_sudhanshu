@@ -1,0 +1,375 @@
+{
+	"name": "uis_df_generic_ar_invoice_raw_table",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "uis_df_sql_linked_service",
+			"type": "LinkedServiceReference"
+		},
+		"folder": {
+			"name": "uis_df_generic_ar_invoices"
+		},
+		"annotations": [],
+		"type": "AzureSqlTable",
+		"schema": [
+			{
+				"name": "INTERFACE_NAME",
+				"type": "nvarchar"
+			},
+			{
+				"name": "BU_NAME",
+				"type": "nvarchar"
+			},
+			{
+				"name": "BILL_CUSTOMER_ACCOUNT_NUMBER",
+				"type": "nvarchar"
+			},
+			{
+				"name": "BILL_CUSTOMER_SITE_NUMBER",
+				"type": "nvarchar"
+			},
+			{
+				"name": "INTERFACE_LINE_CONTEXT",
+				"type": "nvarchar"
+			},
+			{
+				"name": "INTERFACE_LINE_ATTRIBUTE1",
+				"type": "nvarchar"
+			},
+			{
+				"name": "INTERFACE_LINE_ATTRIBUTE2",
+				"type": "nvarchar"
+			},
+			{
+				"name": "INTERFACE_LINE_ATTRIBUTE3",
+				"type": "nvarchar"
+			},
+			{
+				"name": "INTERFACE_LINE_ATTRIBUTE4",
+				"type": "nvarchar"
+			},
+			{
+				"name": "INTERFACE_LINE_ATTRIBUTE5",
+				"type": "nvarchar"
+			},
+			{
+				"name": "INTERFACE_LINE_ATTRIBUTE6",
+				"type": "nvarchar"
+			},
+			{
+				"name": "INTERFACE_LINE_ATTRIBUTE7",
+				"type": "nvarchar"
+			},
+			{
+				"name": "INTERFACE_LINE_ATTRIBUTE8",
+				"type": "nvarchar"
+			},
+			{
+				"name": "INTERFACE_LINE_ATTRIBUTE9",
+				"type": "nvarchar"
+			},
+			{
+				"name": "INTERFACE_LINE_ATTRIBUTE10",
+				"type": "nvarchar"
+			},
+			{
+				"name": "INTERFACE_LINE_ATTRIBUTE11",
+				"type": "nvarchar"
+			},
+			{
+				"name": "INTERFACE_LINE_ATTRIBUTE12",
+				"type": "nvarchar"
+			},
+			{
+				"name": "INTERFACE_LINE_ATTRIBUTE13",
+				"type": "nvarchar"
+			},
+			{
+				"name": "INTERFACE_LINE_ATTRIBUTE14",
+				"type": "nvarchar"
+			},
+			{
+				"name": "INTERFACE_LINE_ATTRIBUTE15",
+				"type": "nvarchar"
+			},
+			{
+				"name": "BATCH_SOURCE_NAME",
+				"type": "nvarchar"
+			},
+			{
+				"name": "CUST_TRX_TYPE_NAME",
+				"type": "nvarchar"
+			},
+			{
+				"name": "LINE_TYPE",
+				"type": "nvarchar"
+			},
+			{
+				"name": "DESCRIPTION",
+				"type": "nvarchar"
+			},
+			{
+				"name": "CURRENCY_CODE",
+				"type": "nvarchar"
+			},
+			{
+				"name": "CONVERSION_TYPE",
+				"type": "nvarchar"
+			},
+			{
+				"name": "CONVERSION_DATE",
+				"type": "datetime",
+				"precision": 23,
+				"scale": 3
+			},
+			{
+				"name": "CONVERSION_RATE",
+				"type": "nvarchar"
+			},
+			{
+				"name": "AMOUNT",
+				"type": "nvarchar"
+			},
+			{
+				"name": "TERM_NAME",
+				"type": "nvarchar"
+			},
+			{
+				"name": "LINK_TO_LINE_CONTEXT",
+				"type": "nvarchar"
+			},
+			{
+				"name": "LINK_TO_LINE_ATTRIBUTE1",
+				"type": "nvarchar"
+			},
+			{
+				"name": "LINK_TO_LINE_ATTRIBUTE2",
+				"type": "nvarchar"
+			},
+			{
+				"name": "LINK_TO_LINE_ATTRIBUTE3",
+				"type": "nvarchar"
+			},
+			{
+				"name": "LINK_TO_LINE_ATTRIBUTE4",
+				"type": "nvarchar"
+			},
+			{
+				"name": "LINK_TO_LINE_ATTRIBUTE5",
+				"type": "nvarchar"
+			},
+			{
+				"name": "LINK_TO_LINE_ATTRIBUTE6",
+				"type": "nvarchar"
+			},
+			{
+				"name": "LINK_TO_LINE_ATTRIBUTE7",
+				"type": "nvarchar"
+			},
+			{
+				"name": "LINK_TO_LINE_ATTRIBUTE8",
+				"type": "nvarchar"
+			},
+			{
+				"name": "LINK_TO_LINE_ATTRIBUTE9",
+				"type": "nvarchar"
+			},
+			{
+				"name": "LINK_TO_LINE_ATTRIBUTE10",
+				"type": "nvarchar"
+			},
+			{
+				"name": "LINK_TO_LINE_ATTRIBUTE11",
+				"type": "nvarchar"
+			},
+			{
+				"name": "LINK_TO_LINE_ATTRIBUTE12",
+				"type": "nvarchar"
+			},
+			{
+				"name": "LINK_TO_LINE_ATTRIBUTE13",
+				"type": "nvarchar"
+			},
+			{
+				"name": "LINK_TO_LINE_ATTRIBUTE14",
+				"type": "nvarchar"
+			},
+			{
+				"name": "LINK_TO_LINE_ATTRIBUTE15",
+				"type": "nvarchar"
+			},
+			{
+				"name": "TRX_NUMBER",
+				"type": "nvarchar"
+			},
+			{
+				"name": "TRX_DATE",
+				"type": "datetime",
+				"precision": 23,
+				"scale": 3
+			},
+			{
+				"name": "GL_DATE",
+				"type": "datetime",
+				"precision": 23,
+				"scale": 3
+			},
+			{
+				"name": "QUANTITY",
+				"type": "nvarchar"
+			},
+			{
+				"name": "UNIT_SELLING_PRICE",
+				"type": "nvarchar"
+			},
+			{
+				"name": "TAX_CODE",
+				"type": "nvarchar"
+			},
+			{
+				"name": "UOM_NAME",
+				"type": "nvarchar"
+			},
+			{
+				"name": "ATTRIBUTE13",
+				"type": "nvarchar"
+			},
+			{
+				"name": "ATTRIBUTE15",
+				"type": "nvarchar"
+			},
+			{
+				"name": "PURCHASE_ORDER",
+				"type": "nvarchar"
+			},
+			{
+				"name": "HEADER_ATTRIBUTE_CATEGORY",
+				"type": "nvarchar"
+			},
+			{
+				"name": "HEADER_ATTRIBUTE1",
+				"type": "nvarchar"
+			},
+			{
+				"name": "HEADER_ATTRIBUTE2",
+				"type": "nvarchar"
+			},
+			{
+				"name": "HEADER_ATTRIBUTE3",
+				"type": "nvarchar"
+			},
+			{
+				"name": "HEADER_ATTRIBUTE4",
+				"type": "nvarchar"
+			},
+			{
+				"name": "HEADER_ATTRIBUTE5",
+				"type": "nvarchar"
+			},
+			{
+				"name": "HEADER_ATTRIBUTE6",
+				"type": "nvarchar"
+			},
+			{
+				"name": "HEADER_ATTRIBUTE7",
+				"type": "nvarchar"
+			},
+			{
+				"name": "HEADER_ATTRIBUTE8",
+				"type": "nvarchar"
+			},
+			{
+				"name": "HEADER_ATTRIBUTE9",
+				"type": "nvarchar"
+			},
+			{
+				"name": "HEADER_ATTRIBUTE10",
+				"type": "nvarchar"
+			},
+			{
+				"name": "HEADER_ATTRIBUTE11",
+				"type": "nvarchar"
+			},
+			{
+				"name": "HEADER_ATTRIBUTE12",
+				"type": "nvarchar"
+			},
+			{
+				"name": "HEADER_ATTRIBUTE13",
+				"type": "nvarchar"
+			},
+			{
+				"name": "HEADER_ATTRIBUTE14",
+				"type": "nvarchar"
+			},
+			{
+				"name": "HEADER_ATTRIBUTE15",
+				"type": "nvarchar"
+			},
+			{
+				"name": "ACCOUNT_CLASS",
+				"type": "nvarchar"
+			},
+			{
+				"name": "SEGMENT1",
+				"type": "nvarchar"
+			},
+			{
+				"name": "SEGMENT2",
+				"type": "nvarchar"
+			},
+			{
+				"name": "SEGMENT3",
+				"type": "nvarchar"
+			},
+			{
+				"name": "SEGMENT4",
+				"type": "nvarchar"
+			},
+			{
+				"name": "SEGMENT5",
+				"type": "nvarchar"
+			},
+			{
+				"name": "SEGMENT6",
+				"type": "nvarchar"
+			},
+			{
+				"name": "SEGMENT7",
+				"type": "nvarchar"
+			},
+			{
+				"name": "PARTY_NAME",
+				"type": "nvarchar"
+			},
+			{
+				"name": "ORIG_SYSTEM_BILL_CUSTOMER_REF",
+				"type": "nvarchar"
+			},
+			{
+				"name": "LOCATION",
+				"type": "nvarchar"
+			},
+			{
+				"name": "ORIG_SYSTEM_BILL_ADDRESS_REF",
+				"type": "nvarchar"
+			},
+			{
+				"name": "PRIMARY_SALESREP_NUMBER",
+				"type": "nvarchar"
+			},
+			{
+				"name": "MEMO_LINE_NAME",
+				"type": "nvarchar"
+			},
+			{
+				"name": "SALES_ORDER",
+				"type": "nvarchar"
+			}
+		],
+		"typeProperties": {
+			"schema": "dbo",
+			"table": "tb_generic_ar_invoice_raw"
+		}
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}

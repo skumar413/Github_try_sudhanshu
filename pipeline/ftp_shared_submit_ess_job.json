@@ -1,0 +1,278 @@
+{
+	"name": "ftp_shared_submit_ess_job",
+	"properties": {
+		"activities": [
+			{
+				"name": "Submit ESS Job",
+				"type": "WebActivity",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 2,
+					"retryIntervalInSeconds": 60,
+					"secureOutput": false,
+					"secureInput": true
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "POST",
+					"headers": {
+						"Autho": "Bearer {TOKEN}"
+					},
+					"relativeUrl": {
+						"value": "@variables('submit_endpoint')",
+						"type": "Expression"
+					},
+					"body": {
+						"value": "@pipeline().parameters.payload",
+						"type": "Expression"
+					}
+				},
+				"linkedServiceName": {
+					"referenceName": "uis_fusion_base_url_linked_service",
+					"type": "LinkedServiceReference"
+				}
+			},
+			{
+				"name": "Fail Submit ESS Job",
+				"type": "Fail",
+				"dependsOn": [
+					{
+						"activity": "Submit ESS Job",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"message": "ESS job submission failed.",
+					"errorCode": "ESS_SUBMIT_FAILED"
+				}
+			},
+			{
+				"name": "Validate Request ID",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "Submit ESS Job",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@and(\n  greater(length(trim(string(coalesce(activity('Submit ESS Job').output.ReqstId, '')))), 0),\n  and(\n    not(equals(trim(string(coalesce(activity('Submit ESS Job').output.ReqstId, ''))), '-1')),\n    not(equals(toLower(trim(string(coalesce(activity('Submit ESS Job').output.ReqstId, '')))), 'null'))\n  )\n)",
+						"type": "Expression"
+					},
+					"ifFalseActivities": [
+						{
+							"name": "Fail Invalid Request ID",
+							"type": "Fail",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"message": "ESS job submission returned an invalid request ID.",
+								"errorCode": "ESS_INVALID_REQUEST_ID"
+							}
+						}
+					],
+					"ifTrueActivities": [
+						{
+							"name": "Set Request ID",
+							"type": "SetVariable",
+							"dependsOn": [],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "requestId",
+								"value": {
+									"value": "@string(activity('Submit ESS Job').output.ReqstId)",
+									"type": "Expression"
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "Poll Status",
+				"type": "Until",
+				"dependsOn": [
+					{
+						"activity": "Validate Request ID",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@contains(createArray('SUCCEEDED','ERROR','FAILED','WARNING'), coalesce(string(json(activity('Get Job Status').output.items[0].RequestStatus).JOBS.STATUS), 'PENDING'))",
+						"type": "Expression"
+					},
+					"activities": [
+						{
+							"name": "Wait Before Poll",
+							"type": "Wait",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"waitTimeInSeconds": 30
+							}
+						},
+						{
+							"name": "Get Job Status",
+							"type": "WebActivity",
+							"dependsOn": [
+								{
+									"activity": "Wait Before Poll",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 2,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"method": "GET",
+								"relativeUrl": {
+									"value": "@concat(variables('status_endpoint'),variables('requestId'))",
+									"type": "Expression"
+								}
+							},
+							"linkedServiceName": {
+								"referenceName": "uis_fusion_base_url_linked_service",
+								"type": "LinkedServiceReference"
+							}
+						}
+					],
+					"timeout": "0.12:00:00"
+				}
+			},
+			{
+				"name": "Fail Polling",
+				"type": "Fail",
+				"dependsOn": [
+					{
+						"activity": "Poll Status",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"message": "ESS job polling failed or timed out.",
+					"errorCode": "ESS_POLL_FAILED"
+				}
+			},
+			{
+				"name": "Evaluate Final Status",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "Poll Status",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@equals(string(json(activity('Get Job Status').output.items[0].RequestStatus).JOBS.STATUS), 'SUCCEEDED')",
+						"type": "Expression"
+					},
+					"ifFalseActivities": [
+						{
+							"name": "Fail Terminal Status",
+							"type": "Fail",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"message": "ESS job completed with a non-success terminal status.",
+								"errorCode": "ESS_TERMINAL_STATUS_FAILED"
+							}
+						}
+					],
+					"ifTrueActivities": [
+						{
+							"name": "Set ProcessId",
+							"type": "SetVariable",
+							"dependsOn": [],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "pipelineReturnValue",
+								"value": [
+									{
+										"key": "process_id",
+										"value": {
+											"type": "Expression",
+											"content": "@variables('requestId')"
+										}
+									},
+									{
+										"key": "final_status",
+										"value": {
+											"type": "Expression",
+											"content": "@json(activity('Get Job Status').output.items[0].RequestStatus).JOBS.STATUS"
+										}
+									},
+									{
+										"key": "job_name",
+										"value": {
+											"type": "Expression",
+											"content": "@json(activity('Get Job Status').output.items[0].RequestStatus).JOBS.JOBNAME"
+										}
+									}
+								],
+								"setSystemVariable": true
+							}
+						}
+					]
+				}
+			}
+		],
+		"parameters": {
+			"payload": {
+				"type": "string"
+			}
+		},
+		"variables": {
+			"requestId": {
+				"type": "String"
+			},
+			"submit_endpoint": {
+				"type": "String",
+				"defaultValue": "/fscmRestApi/resources/11.13.18.05/erpintegrations"
+			},
+			"status_endpoint": {
+				"type": "String",
+				"defaultValue": "/fscmRestApi/resources/11.13.18.05/erpintegrations?finder=ESSExecutionDetailsRF;requestId="
+			}
+		},
+		"folder": {
+			"name": "df_ftp_shared_pipelines"
+		},
+		"annotations": [],
+		"lastPublishTime": "2026-03-27T15:33:00Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

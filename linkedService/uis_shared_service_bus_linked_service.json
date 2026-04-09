@@ -1,0 +1,14 @@
+{
+	"name": "uis_shared_service_bus_linked_service",
+	"type": "Microsoft.DataFactory/factories/linkedservices",
+	"properties": {
+		"annotations": [],
+		"type": "WebConnection",
+		"typeProperties": {
+			"url": "https://uis-sb-integration-poc-uks-001.servicebus.windows.net",
+			"enableServerCertificateValidation": true,
+			"authenticationType": "ManagedServiceIdentity",
+			"aadResourceId": "https://servicebus.azure.net"
+		}
+	}
+}

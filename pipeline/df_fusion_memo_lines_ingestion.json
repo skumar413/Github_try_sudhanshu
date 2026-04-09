@@ -1,0 +1,594 @@
+{
+	"name": "df_fusion_memo_lines_ingestion",
+	"properties": {
+		"description": "API for querying memo lines and also to send memo lines to specific third parties",
+		"activities": [
+			{
+				"name": "Call BIP Report",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Set End Date",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Set Start Date",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "ftp_download_bip_report",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"payload": {
+							"value": "{\n  \"OperationName\": \"submitESSJobRequest\",\n  \"JobPackageName\": \"/oracle/apps/ess/custom/oracle/apps/ess/custom/test_uoc_supplier/\",\n  \"JobDefName\": \"OUXXARMemoLineExtract\",\n  \"ESSParameters\": \"@{formatDateTime(variables('start_date'), 'yyyy-MM-dd HH:mm:ss')}\"\n}",
+							"type": "Expression"
+						},
+						"targetDirectory": "fusion-memo-lines/temp/report"
+					}
+				}
+			},
+			{
+				"name": "Set Report File name",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Call BIP Report",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "report_file_name",
+					"value": {
+						"value": "@concat('memo_lines_', formatDateTime(utcNow(), 'yyyyMMddHHmmss'))",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Move Report",
+				"type": "Copy",
+				"dependsOn": [
+					{
+						"activity": "Set Report File name",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "DelimitedTextSource",
+						"storeSettings": {
+							"type": "AzureBlobStorageReadSettings",
+							"recursive": true,
+							"enablePartitionDiscovery": false
+						},
+						"formatSettings": {
+							"type": "DelimitedTextReadSettings"
+						}
+					},
+					"sink": {
+						"type": "DelimitedTextSink",
+						"storeSettings": {
+							"type": "AzureBlobStorageWriteSettings"
+						},
+						"formatSettings": {
+							"type": "DelimitedTextWriteSettings",
+							"quoteAllText": true,
+							"fileExtension": ".txt"
+						}
+					},
+					"enableStaging": false,
+					"translator": {
+						"type": "TabularTranslator",
+						"typeConversion": true,
+						"typeConversionSettings": {
+							"allowDataTruncation": true,
+							"treatBooleanAsNumber": false
+						}
+					}
+				},
+				"inputs": [
+					{
+						"referenceName": "df_fusion_memo_lines_dataset",
+						"type": "DatasetReference",
+						"parameters": {
+							"folder_name": "temp/report/Report",
+							"file_name": "@activity('Call BIP Report').output.pipelineReturnValue.file_name"
+						}
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "df_fusion_memo_lines_dataset",
+						"type": "DatasetReference",
+						"parameters": {
+							"folder_name": "fusion-memo-lines",
+							"file_name": "@variables('report_file_name')"
+						}
+					}
+				]
+			},
+			{
+				"name": "Delete Temp",
+				"type": "Delete",
+				"dependsOn": [
+					{
+						"activity": "Insert Memo Lines",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"dataset": {
+						"referenceName": "df_fusion_memo_lines_dataset",
+						"type": "DatasetReference",
+						"parameters": {
+							"folder_name": "temp/report",
+							"file_name": "*"
+						}
+					},
+					"enableLogging": false,
+					"storeSettings": {
+						"type": "AzureBlobStorageReadSettings",
+						"recursive": true,
+						"wildcardFileName": "*",
+						"enablePartitionDiscovery": false
+					}
+				}
+			},
+			{
+				"name": "Archive",
+				"type": "Copy",
+				"dependsOn": [
+					{
+						"activity": "Insert Memo Lines",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "DelimitedTextSource",
+						"storeSettings": {
+							"type": "AzureBlobStorageReadSettings",
+							"recursive": true,
+							"enablePartitionDiscovery": false
+						},
+						"formatSettings": {
+							"type": "DelimitedTextReadSettings"
+						}
+					},
+					"sink": {
+						"type": "DelimitedTextSink",
+						"storeSettings": {
+							"type": "AzureBlobStorageWriteSettings"
+						},
+						"formatSettings": {
+							"type": "DelimitedTextWriteSettings",
+							"quoteAllText": true,
+							"fileExtension": ".txt"
+						}
+					},
+					"enableStaging": false,
+					"translator": {
+						"type": "TabularTranslator",
+						"typeConversion": true,
+						"typeConversionSettings": {
+							"allowDataTruncation": true,
+							"treatBooleanAsNumber": false
+						}
+					}
+				},
+				"inputs": [
+					{
+						"referenceName": "df_fusion_memo_lines_dataset",
+						"type": "DatasetReference",
+						"parameters": {
+							"folder_name": "fusion-memo-lines",
+							"file_name": "@variables('report_file_name')"
+						}
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "df_fusion_memo_lines_dataset",
+						"type": "DatasetReference",
+						"parameters": {
+							"folder_name": "fusion-memo-lines/archive",
+							"file_name": "@variables('report_file_name')"
+						}
+					}
+				]
+			},
+			{
+				"name": "Clean Up",
+				"type": "Delete",
+				"dependsOn": [
+					{
+						"activity": "Archive",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"dataset": {
+						"referenceName": "df_fusion_memo_lines_dataset",
+						"type": "DatasetReference",
+						"parameters": {
+							"folder_name": "fusion-memo-lines",
+							"file_name": "@variables('report_file_name')"
+						}
+					},
+					"enableLogging": false,
+					"storeSettings": {
+						"type": "AzureBlobStorageReadSettings",
+						"recursive": true,
+						"enablePartitionDiscovery": false
+					}
+				}
+			},
+			{
+				"name": "Set End Date",
+				"type": "SetVariable",
+				"dependsOn": [],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "end_date",
+					"value": {
+						"value": "@utcNow()",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Set Start Date",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Get Last Memo Line Date",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "start_date",
+					"value": {
+						"value": "@coalesce(activity('Get Last Memo Line Date').output.resultSets?[0]?.rows[0]?.ToDate, addDays(utcNow(), -1095))",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Get Last Memo Line Date",
+				"description": "Get the last extract date for the next run",
+				"type": "Script",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "Query",
+							"text": "SELECT TOP 1 [ToDate] FROM [dbo].[tb_memo_lines]\nORDER BY [ToDate] DESC"
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			},
+			{
+				"name": "Insert Memo Lines",
+				"type": "Copy",
+				"dependsOn": [
+					{
+						"activity": "Move Report",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "DelimitedTextSource",
+						"storeSettings": {
+							"type": "AzureBlobStorageReadSettings",
+							"recursive": true,
+							"enablePartitionDiscovery": false
+						},
+						"formatSettings": {
+							"type": "DelimitedTextReadSettings"
+						}
+					},
+					"sink": {
+						"type": "AzureSqlSink",
+						"writeBehavior": "upsert",
+						"upsertSettings": {
+							"useTempDB": true,
+							"keys": [
+								"MemoLineId"
+							]
+						},
+						"sqlWriterUseTableLock": false,
+						"disableMetricsCollection": false
+					},
+					"enableStaging": false,
+					"translator": {
+						"type": "TabularTranslator",
+						"mappings": [
+							{
+								"source": {
+									"name": "MEMO_LINE_ID",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "MemoLineId",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "NAME",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "MemoName",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "DESCRIPTION",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Description",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "FROMDATE",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "FromDate",
+									"type": "DateTime",
+									"physicalType": "datetime"
+								}
+							},
+							{
+								"source": {
+									"name": "TODATE",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "ToDate",
+									"type": "DateTime",
+									"physicalType": "datetime"
+								}
+							},
+							{
+								"source": {
+									"name": "TYPE",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Type",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "TAXCLASSIFICATION",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "TaxClassification",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "TAXPRODUCTCATEGORY",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "TaxProductCategory",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "BUSINESSUNITNAME",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "BusinessUnitName",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "REVENUEACCOUNT",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "RevenueAccount",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "CREATIONDATE",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "CreationDate",
+									"type": "DateTime",
+									"physicalType": "datetime"
+								}
+							},
+							{
+								"source": {
+									"name": "LASTUPDATEDATE",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "LastUpdateDate",
+									"type": "DateTime",
+									"physicalType": "datetime"
+								}
+							}
+						],
+						"typeConversion": true,
+						"typeConversionSettings": {
+							"allowDataTruncation": true,
+							"treatBooleanAsNumber": false
+						}
+					}
+				},
+				"inputs": [
+					{
+						"referenceName": "df_fusion_memo_lines_dataset",
+						"type": "DatasetReference",
+						"parameters": {
+							"folder_name": "fusion-memo-lines",
+							"file_name": "@variables('report_file_name')"
+						}
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "df_memo_lines_table",
+						"type": "DatasetReference",
+						"parameters": {
+							"table_name": "tb_memo_lines"
+						}
+					}
+				]
+			}
+		],
+		"variables": {
+			"start_date": {
+				"type": "String"
+			},
+			"end_date": {
+				"type": "String"
+			},
+			"payload": {
+				"type": "String"
+			},
+			"report_file_name": {
+				"type": "String"
+			}
+		},
+		"folder": {
+			"name": "df_fusion_ais_memo_lines"
+		},
+		"annotations": [],
+		"lastPublishTime": "2026-03-17T11:12:09Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

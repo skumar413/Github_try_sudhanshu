@@ -1,0 +1,1194 @@
+{
+	"name": "df_fetch_fusion_lookup_supplier_extract",
+	"properties": {
+		"activities": [
+			{
+				"name": "Logging Start",
+				"type": "Script",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "@concat('INSERT INTO [dbo].[tbl_integration_transaction_log] ([pipeline_name],[pipeline_run_id],[activity_name],[activity_type],[step_name],[execution_status],[severity],[source_system],[target_system],[entity_name],[object_name],[business_key],[correlation_id],[file_name],[doc_id],[message],[error_code],[error_message],[start_time_utc],[end_time_utc],[created_by],[created_at_utc],[document_id],[status],[success_flag],[created_at],[updated_at]) VALUES (''', pipeline().Pipeline, ''',''', pipeline().RunId, ''',''Logging Start'',''Script'',''Initialize Supplier refresh logging'',''InProgress'',''Info'',''Oracle Fusion'',''SQL Supplier Tables'',''Fusion Supplier Refresh'',''Supplier Refresh'',''', pipeline().RunId, ''',''', pipeline().RunId, ''',NULL,NULL,''Fusion Supplier refresh started.'',NULL,NULL,SYSUTCDATETIME(),SYSUTCDATETIME(),''ADF'',SYSUTCDATETIME(),NULL,''in-progress'',NULL,GETDATE(),GETDATE())')",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			},
+			{
+				"name": "Supplier Master Lookup",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Logging Start",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": true
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "ftp_download_bip_report",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"payload": "{\n  \"OperationName\": \"submitESSJobRequest\",\n  \"JobPackageName\": \"/oracle/apps/ess/custom/supplier_master/\",\n  \"JobDefName\": \"UOC_FIN_SHA_SUPPLIER_MASTER_EXTRACT\",\n  \"ESSParameters\": \"\"\n}",
+						"targetDirectory": "common/temp/supplier/report"
+					}
+				}
+			},
+			{
+				"name": "Log Supplier Lookup Failure",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "Supplier Master Lookup",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "@concat('INSERT INTO [dbo].[tbl_integration_transaction_log] ([pipeline_name],[pipeline_run_id],[activity_name],[activity_type],[step_name],[execution_status],[severity],[source_system],[target_system],[entity_name],[object_name],[business_key],[correlation_id],[file_name],[doc_id],[message],[error_code],[error_message],[start_time_utc],[end_time_utc],[created_by],[created_at_utc],[document_id],[status],[success_flag],[created_at],[updated_at]) VALUES (''', pipeline().Pipeline, ''',''', pipeline().RunId, ''',''Log Supplier Lookup Failure'',''Script'',''Run supplier master extract'',''Failed'',''Error'',''Oracle Fusion'',''SQL Lookup Tables'',''Fusion Lookup Refresh'',''Supplier Lookup'',''supplier-master'',''', pipeline().RunId, ''',''common/temp/supplier/report'',NULL,''Supplier master lookup failed.'',''SUPPLIER_LOOKUP_FAILED'',''Supplier master lookup failed.'',SYSUTCDATETIME(),SYSUTCDATETIME(),''ADF'',SYSUTCDATETIME(),NULL,''failed-supplier-lookup'',0,GETDATE(),GETDATE())')",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			},
+			{
+				"name": "Fail Supplier Lookup",
+				"type": "Fail",
+				"dependsOn": [
+					{
+						"activity": "Log Supplier Lookup Failure",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"message": "Supplier master lookup failed.",
+					"errorCode": "SUPPLIER_LOOKUP_FAILED"
+				}
+			},
+			{
+				"name": "Set supplier File name",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Supplier Master Lookup",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "supllier_master_file_name",
+					"value": {
+						"value": "@concat('supplier_master_extract_', formatDateTime(utcNow(), 'yyyyMMddHHmmss'), '.csv')",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Move Supplier Master Extract",
+				"type": "Copy",
+				"dependsOn": [
+					{
+						"activity": "Set supplier File name",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 1,
+					"retryIntervalInSeconds": 60,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "BinarySource",
+						"storeSettings": {
+							"type": "AzureBlobStorageReadSettings",
+							"recursive": true,
+							"deleteFilesAfterCompletion": true
+						},
+						"formatSettings": {
+							"type": "BinaryReadSettings"
+						}
+					},
+					"sink": {
+						"type": "BinarySink",
+						"storeSettings": {
+							"type": "AzureBlobStorageWriteSettings"
+						}
+					},
+					"enableStaging": false
+				},
+				"inputs": [
+					{
+						"referenceName": "df_common_blob_dataset",
+						"type": "DatasetReference",
+						"parameters": {
+							"folder_name": "temp/supplier/report/Report",
+							"file_name": {
+								"value": "@activity('Supplier Master Lookup').output.pipelineReturnValue.file_name",
+								"type": "Expression"
+							}
+						}
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "df_common_blob_dataset",
+						"type": "DatasetReference",
+						"parameters": {
+							"folder_name": "supplier-master-extract",
+							"file_name": {
+								"value": "@variables('supllier_master_file_name')",
+								"type": "Expression"
+							}
+						}
+					}
+				]
+			},
+			{
+				"name": "Log Supplier Move Failure",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "Move Supplier Master Extract",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "@concat('INSERT INTO [dbo].[tbl_integration_transaction_log] ([pipeline_name],[pipeline_run_id],[activity_name],[activity_type],[step_name],[execution_status],[severity],[source_system],[target_system],[entity_name],[object_name],[business_key],[correlation_id],[file_name],[doc_id],[message],[error_code],[error_message],[start_time_utc],[end_time_utc],[created_by],[created_at_utc],[document_id],[status],[success_flag],[created_at],[updated_at]) VALUES (''', pipeline().Pipeline, ''',''', pipeline().RunId, ''',''Log Supplier Move Failure'',''Script'',''Move supplier extract file'',''Failed'',''Error'',''Oracle Fusion'',''SQL Lookup Tables'',''Fusion Lookup Refresh'',''supplier-master-extract'',''', activity('Supplier Master Lookup').output.pipelineReturnValue.process_id, ''',''', pipeline().RunId, ''',''', variables('supllier_master_file_name'), ''',''', activity('Supplier Master Lookup').output.pipelineReturnValue.process_id, ''',''Moving supplier extract failed.'',''SUPPLIER_MOVE_FAILED'',''Moving supplier extract failed.'',SYSUTCDATETIME(),SYSUTCDATETIME(),''ADF'',SYSUTCDATETIME(),''', activity('Supplier Master Lookup').output.pipelineReturnValue.process_id, ''',''failed-supplier-file-move'',0,GETDATE(),GETDATE())')",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			},
+			{
+				"name": "Fail Supplier Move",
+				"type": "Fail",
+				"dependsOn": [
+					{
+						"activity": "Log Supplier Move Failure",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"message": "Moving supplier extract failed.",
+					"errorCode": "SUPPLIER_MOVE_FAILED"
+				}
+			},
+			{
+				"name": "Insert Supplier Data into SQL",
+				"type": "Copy",
+				"dependsOn": [
+					{
+						"activity": "Move Supplier Master Extract",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 1,
+					"retryIntervalInSeconds": 60,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "DelimitedTextSource",
+						"storeSettings": {
+							"type": "AzureBlobStorageReadSettings",
+							"recursive": true,
+							"enablePartitionDiscovery": false
+						},
+						"formatSettings": {
+							"type": "DelimitedTextReadSettings"
+						}
+					},
+					"sink": {
+						"type": "AzureSqlSink",
+						"preCopyScript": "TRUNCATE TABLE [dbo].[tbl_supplier_details]",
+						"writeBehavior": "insert",
+						"sqlWriterUseTableLock": false,
+						"disableMetricsCollection": false
+					},
+					"enableStaging": false,
+					"translator": {
+						"type": "TabularTranslator",
+						"mappings": [
+							{
+								"source": {
+									"name": "SUPPLIER_ID",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "SUPPLIER_ID",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "SUPPLIER_NUMBER",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "SUPPLIER_NUMBER",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "SUPPLIER_NAME",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "SUPPLIER_NAME",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "CREATION_SOURCE",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "CREATION_SOURCE",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "ENABLED_FLAG",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "ENABLED_FLAG",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "ORGANIZATION_TYPE_LOOKUP_CODE",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "ORGANIZATION_TYPE_LOOKUP_CODE",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "SUPPLIER_TAXPAYER_COUNTRY",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "SUPPLIER_TAXPAYER_COUNTRY",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "SUPPLIER_CREATION_DATE",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "SUPPLIER_CREATION_DATE",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "SUPPLIER_CREATED_BY",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "SUPPLIER_CREATED_BY",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "SUPPLIER_LAST_UPDATE_DATE",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "SUPPLIER_LAST_UPDATE_DATE",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "SUPPLIER_LAST_UPDATED_BY",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "SUPPLIER_LAST_UPDATED_BY",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "BUSINESS_RELATIONSHIP",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "BUSINESS_RELATIONSHIP",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "ADDRESS_NAME",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "ADDRESS_NAME",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "LOCATION_ID",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "LOCATION_ID",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "PARTY_SITE_ID",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "PARTY_SITE_ID",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "COUNTRY",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "COUNTRY",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "ADDRESS_LINE1",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "ADDRESS_LINE1",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "ADDRESS_LINE2",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "ADDRESS_LINE2",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "CITY",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "CITY",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "POSTAL_CODE",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "POSTAL_CODE",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "SUPPLIER_SITE_ID",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "SUPPLIER_SITE_ID",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "SUPPLIER_SITE_CODE",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "SUPPLIER_SITE_CODE",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "SUPPLIER_SITE_COMMUNICATION_METHOD",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "SUPPLIER_SITE_COMMUNICATION_METHOD",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "EFFECTIVE_START_DATE",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "EFFECTIVE_START_DATE",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "EFFECTIVE_END_DATE",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "EFFECTIVE_END_DATE",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "INACTIVE_DATE",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "INACTIVE_DATE",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "PROCUREMENT_BU_ID",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "PROCUREMENT_BU_ID",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "PURCHASING_FLAG",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "PURCHASING_FLAG",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "SOURCING_FLAG",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "SOURCING_FLAG",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "PAY_FLAG",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "PAY_FLAG",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "TERMS_ID",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "TERMS_ID",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "PAYMENT_TERMS",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "PAYMENT_TERMS",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "SUPPLIER_NOTIF_METHOD",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "SUPPLIER_NOTIF_METHOD",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "EMAIL_ADDRESS",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "EMAIL_ADDRESS",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "PRIMARY_PAY_SITE_FLAG",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "PRIMARY_PAY_SITE_FLAG",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "HOLD_FLAG",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "HOLD_FLAG",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "PURCHASING_HOLD_REASON",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "PURCHASING_HOLD_REASON",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "VENDOR_SITE_CODE_ALT",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "VENDOR_SITE_CODE_ALT",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "AREA_CODE",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "AREA_CODE",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "TERMS_DATE_BASIS",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "TERMS_DATE_BASIS",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "PAY_GROUP_LOOKUP_CODE",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "PAY_GROUP_LOOKUP_CODE",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "PAYMENT_PRIORITY",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "PAYMENT_PRIORITY",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "PAY_DATE_BASIS_LOOKUP_CODE",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "PAY_DATE_BASIS_LOOKUP_CODE",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "HOLD_ALL_PAYMENTS_FLAG",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "HOLD_ALL_PAYMENTS_FLAG",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "HOLD_FUTURE_PAYMENTS_FLAG",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "HOLD_FUTURE_PAYMENTS_FLAG",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "HOLD_REASON",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "HOLD_REASON",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "PAYMENT_HOLD_DATE",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "PAYMENT_HOLD_DATE",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "INVOICE_CURRENCY_CODE",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "INVOICE_CURRENCY_CODE",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "PAYMENT_CURRENCY_CODE",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "PAYMENT_CURRENCY_CODE",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "DEFAULT_PAYMENT_METHOD_CODE",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "DEFAULT_PAYMENT_METHOD_CODE",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "SITE_CREATION_DATE",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "SITE_CREATION_DATE",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "SITE_CREATED_BY",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "SITE_CREATED_BY",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "SITE_LAST_UPDATE_DATE",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "SITE_LAST_UPDATE_DATE",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "SITE_LAST_UPDATED_BY",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "SITE_LAST_UPDATED_BY",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "BILL_TO_BU_ID",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "BILL_TO_BU_ID",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "LIABILITY_ACCOUNT",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "LIABILITY_ACCOUNT",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "PREPAY_ACCOUNT",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "PREPAY_ACCOUNT",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "SUPPLIER_BANK_ACCOUNT_NUMBER",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "SUPPLIER_BANK_ACCOUNT_NUMBER",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "SUPPLIER_BANK_ACCOUNT_NAME",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "SUPPLIER_BANK_ACCOUNT_NAME",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "SUPPLIER_ACCOUNT_BANK_NAME",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "SUPPLIER_ACCOUNT_BANK_NAME",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							}
+						],
+						"typeConversion": true,
+						"typeConversionSettings": {
+							"allowDataTruncation": false,
+							"treatBooleanAsNumber": false
+						}
+					}
+				},
+				"inputs": [
+					{
+						"referenceName": "common_lookup_storage_dataset",
+						"type": "DatasetReference",
+						"parameters": {
+							"folder_name": "supplier-master-extract",
+							"file_name": {
+								"value": "@variables('supllier_master_file_name')",
+								"type": "Expression"
+							}
+						}
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "df_payment_status_table",
+						"type": "DatasetReference",
+						"parameters": {
+							"table_name": "tbl_supplier_details"
+						}
+					}
+				]
+			},
+			{
+				"name": "Log Supplier SQL Load Failure",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "Insert Supplier Data into SQL",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "@concat('INSERT INTO [dbo].[tbl_integration_transaction_log] ([pipeline_name],[pipeline_run_id],[activity_name],[activity_type],[step_name],[execution_status],[severity],[source_system],[target_system],[entity_name],[object_name],[business_key],[correlation_id],[file_name],[doc_id],[message],[error_code],[error_message],[start_time_utc],[end_time_utc],[created_by],[created_at_utc],[document_id],[status],[success_flag],[created_at],[updated_at]) VALUES (''', pipeline().Pipeline, ''',''', pipeline().RunId, ''',''Log Supplier SQL Load Failure'',''Script'',''Load supplier extract into SQL'',''Failed'',''Error'',''Oracle Fusion'',''SQL Lookup Tables'',''Fusion Lookup Refresh'',''tbl_supplier_details'',''', activity('Supplier Master Lookup').output.pipelineReturnValue.process_id, ''',''', pipeline().RunId, ''',''', variables('supllier_master_file_name'), ''',''', activity('Supplier Master Lookup').output.pipelineReturnValue.process_id, ''',''Loading supplier extract into SQL failed.'',''SUPPLIER_SQL_LOAD_FAILED'',''Loading supplier extract into SQL failed.'',SYSUTCDATETIME(),SYSUTCDATETIME(),''ADF'',SYSUTCDATETIME(),''', activity('Supplier Master Lookup').output.pipelineReturnValue.process_id, ''',''failed-supplier-sql-load'',0,GETDATE(),GETDATE())')",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			},
+			{
+				"name": "Fail Supplier SQL Load",
+				"type": "Fail",
+				"dependsOn": [
+					{
+						"activity": "Log Supplier SQL Load Failure",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"message": "Loading supplier extract into SQL failed.",
+					"errorCode": "SUPPLIER_SQL_LOAD_FAILED"
+				}
+			},
+			{
+				"name": "Update Supplier BIP Extract Status",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "Insert Supplier Data into SQL",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 1,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "@concat('INSERT INTO [dbo].[tbl_integration_transaction_log] ([pipeline_name],[pipeline_run_id],[activity_name],[activity_type],[step_name],[execution_status],[severity],[source_system],[target_system],[entity_name],[object_name],[business_key],[correlation_id],[file_name],[doc_id],[message],[error_code],[error_message],[start_time_utc],[end_time_utc],[created_by],[created_at_utc],[document_id],[status],[success_flag],[created_at],[updated_at]) VALUES (''', pipeline().Pipeline, ''',''', pipeline().RunId, ''',''Update Supplier BIP Extract Status'',''Script'',''Complete supplier lookup refresh'',''Succeeded'',''Info'',''Oracle Fusion'',''SQL Lookup Tables'',''Fusion Lookup Refresh'',''tbl_supplier_details'',''', activity('Supplier Master Lookup').output.pipelineReturnValue.process_id, ''',''', pipeline().RunId, ''',''', variables('supllier_master_file_name'), ''',''', activity('Supplier Master Lookup').output.pipelineReturnValue.process_id, ''',''Supplier lookup refresh completed successfully.'',NULL,NULL,SYSUTCDATETIME(),SYSUTCDATETIME(),''ADF'',SYSUTCDATETIME(),''', activity('Supplier Master Lookup').output.pipelineReturnValue.process_id, ''',''', activity('Supplier Master Lookup').output.pipelineReturnValue.final_status, ''',1,GETDATE(),GETDATE())')",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			},
+			{
+				"name": "Log Pipeline Success",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "Update Supplier BIP Extract Status",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "uis_df_sql_linked_service",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "NonQuery",
+							"text": {
+								"value": "@concat('INSERT INTO [dbo].[tbl_integration_transaction_log] ([pipeline_name],[pipeline_run_id],[activity_name],[activity_type],[step_name],[execution_status],[severity],[source_system],[target_system],[entity_name],[object_name],[business_key],[correlation_id],[file_name],[doc_id],[message],[error_code],[error_message],[start_time_utc],[end_time_utc],[created_by],[created_at_utc],[document_id],[status],[success_flag],[created_at],[updated_at]) VALUES (''', pipeline().Pipeline, ''',''', pipeline().RunId, ''',''Log Pipeline Success'',''Script'',''Complete Supplier refresh pipeline'',''Succeeded'',''Info'',''Oracle Fusion'',''SQL Supplier Tables'',''Fusion Supplier Refresh'',''Supplier Refresh'',''', pipeline().RunId, ''',''', pipeline().RunId, ''',NULL,NULL,''Fusion Supplier refresh completed successfully.'',NULL,NULL,SYSUTCDATETIME(),SYSUTCDATETIME(),''ADF'',SYSUTCDATETIME(),NULL,''completed'',1,GETDATE(),GETDATE())')",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			}
+		],
+		"variables": {
+			"supllier_master_file_name": {
+				"type": "String"
+			},
+			"bu_file_name": {
+				"type": "String"
+			},
+			"open_accounting_date_file_name": {
+				"type": "String"
+			}
+		},
+		"folder": {
+			"name": "df_fetch_fusion_lookup_tables"
+		},
+		"annotations": [],
+		"lastPublishTime": "2026-03-27T16:01:42Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}
